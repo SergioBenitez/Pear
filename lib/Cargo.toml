@@ -1,0 +1,7 @@
+[package]
+name = "nosh"
+version = "0.1.0"
+authors = ["Sergio Benitez <sb@sergio.bz>"]
+
+[dependencies]
+num-traits = "0.1"

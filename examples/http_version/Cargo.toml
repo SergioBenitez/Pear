@@ -1,0 +1,8 @@
+[package]
+name = "http_version"
+version = "0.0.0"
+workspace = "../../"
+
+[dependencies]
+nosh = { path = "../../lib" }
+nosh_codegen = { path = "../../codegen" }

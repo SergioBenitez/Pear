@@ -1,0 +1,2 @@
+[workspace]
+members = [ "lib/", "codegen/", "examples/http_version" ]
