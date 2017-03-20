@@ -1,12 +1,7 @@
 [package]
-name = "nosh_codegen"
+name = "pear_codegen"
 version = "0.1.0"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 
 [lib]
-proc-macro = true
-
-[dependencies]
-syn = { version = "0.11.7", features = ["parsing", "full", "visit"] }
-quote = "0.3"
-
+plugin = true

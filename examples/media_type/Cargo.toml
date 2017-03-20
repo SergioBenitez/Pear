@@ -1,0 +1,8 @@
+[package]
+name = "media_type"
+version = "0.0.0"
+workspace = "../../"
+
+[dependencies]
+pear = { path = "../../lib" }
+pear_codegen = { path = "../../codegen" }

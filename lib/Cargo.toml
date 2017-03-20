@@ -1,7 +1,4 @@
 [package]
-name = "nosh"
+name = "pear"
 version = "0.1.0"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
-
-[dependencies]
-num-traits = "0.1"

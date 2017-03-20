@@ -1,0 +1,9 @@
+[package]
+name = "ini"
+version = "0.0.0"
+workspace = "../../"
+
+[dependencies]
+pear = { path = "../../lib" }
+pear_codegen = { path = "../../codegen" }
+time = "0.1"
