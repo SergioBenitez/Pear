@@ -75,11 +75,7 @@ fn media_type<'a>(input: &mut &'a str) -> ParseResult<&'a str, MediaType<'a>> {
 
 // FIXME: Autogenerate this by default? Disable with #[parser(bare)]?
 fn parse_media_type(mut input: &str) -> ParseResult<&str, MediaType> {
-    parse!(&mut input, {
-        let output = media_type();
-        eof();
-        output
-    })
+    parse!(&mut input, (media_type(), eof()).0)
 }
 
 #[parser]

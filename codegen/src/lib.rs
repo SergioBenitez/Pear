@@ -27,6 +27,14 @@ use syntax::ext::base::{SyntaxExtension, Annotatable};
 use syntax::ast::{ItemKind, MetaItem, FnDecl, PatKind, SpannedIdent};
 use syntax::codemap::Spanned;
 
+macro_rules! debug {
+    ($($t:tt)*) => (
+        if ::std::env::var("PEAR_CODEGEN_DEBUG").is_ok() {
+            println!($($t)*);
+        }
+    )
+}
+
 /// Compiler hook for Rust to register plugins.
 #[plugin_registrar]
 pub fn plugin_registrar(reg: &mut Registry) {
@@ -96,7 +104,7 @@ fn parse_macro_outer(ecx: &mut ExtCtxt, sp: Span, args: &[TokenTree]) -> Box<Mac
         }
     };
 
-    // println!("Returning: {:?}", expr);
+    // debug!("Returning: {:?}", expr);
     MacEager::expr(expr)
 }
 
@@ -169,11 +177,20 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
             param_expr.node = ExprKind::Binary(op, new_left_expr, new_right_expr);
             P(param_expr)
         }
+        ExprKind::Tup(exprs) => {
+            let mut new_exprs = Vec::new();
+            for expr in exprs {
+                new_exprs.push(remonad_param(ecx, expr, stmts));
+            }
+
+            param_expr.node = ExprKind::Tup(new_exprs);
+            P(param_expr)
+        }
         ExprKind::Path(..) | ExprKind::Lit(..) => {
             param
         }
         _ => {
-            println!("not lifting: {:?}", param.node);
+            debug!("not lifting: {:?}", param.node);
             ecx.span_warn(param.span, "remonad: this expression is not being lifted");
             param
         }
@@ -190,7 +207,7 @@ fn remonad_params<F>(ecx: &ExtCtxt,
                      ) -> P<Expr>
     where F: FnOnce(Vec<P<Expr>>) -> ExprKind
 {
-    println!("remonadding: {} param", params.len());
+    debug!("remonadding: {} param", params.len());
     let mut stmts = vec![];
     let new_params: Vec<_> = params.into_iter()
         .map(|p| remonad_param(ecx, p, &mut stmts))
@@ -205,8 +222,8 @@ fn remonad_params<F>(ecx: &ExtCtxt,
             false => quote_expr!(ecx, ::pear::ParseResult::Done($expr))
         }
     } else {
-        println!("new expr: {:?}", new_expr);
-        println!("statements: {:?}", stmts);
+        debug!("new expr: {:?}", new_expr);
+        debug!("statements: {:?}", stmts);
         stmts.push(ecx.stmt_expr(P(new_expr)));
         let block = ecx.expr_block(ecx.block(expr.span, stmts));
         gen_expr(ecx, input, binding, &block, VecDeque::new())
@@ -223,11 +240,11 @@ fn gen_expr(ecx: &ExtCtxt,
         ExprKind::Call(fn_name, params) => {
             let whitelisted = is_whitelisted_fn(&fn_name);
             if whitelisted {
-                println!("in a whitelisted call");
+                debug!("in a whitelisted call");
                 let remake = |new_params| ExprKind::Call(fn_name, new_params);
                 remonad_params(ecx, input, binding, expr, params, false, remake)
             } else {
-                println!("not whitelisted! inserted input for: {:?}", fn_name);
+                debug!("not whitelisted! inserted input for: {:?}", fn_name);
                 let remake = |mut new_params: Vec<P<Expr>>| {
                     // Ensure we don't insert the input twice.
                     if new_params.is_empty() || &new_params[0] != input {
@@ -264,6 +281,10 @@ fn gen_expr(ecx: &ExtCtxt,
         ExprKind::Tup(exprs) => {
             let remake = |new_exprs| ExprKind::Tup(new_exprs);
             remonad_params(ecx, input, binding, expr, exprs, false, remake)
+        }
+        ExprKind::TupField(indexed_expr, i) => {
+            let remake = |new_expr: Vec<P<Expr>>| ExprKind::TupField(new_expr[0].clone(), i);
+            remonad_params(ecx, input, binding, expr, vec![indexed_expr], false, remake)
         }
         ExprKind::Struct(path, fields, base) => {
             if let Some(ref base) = base {
@@ -312,6 +333,7 @@ fn gen_expr(ecx: &ExtCtxt,
             quote_expr!(ecx, ::pear::ParseResult::Done($expr))
         }
         _ => {
+            debug!("Not lifting: {:?}", expr.node);
             ecx.span_warn(expr.span, "this expression is being lifted blindly");
             quote_expr!(ecx, ::pear::ParseResult::Done($expr))
         }
@@ -337,7 +359,7 @@ fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<To
     let mut stmt = match stmts.pop_front() {
         Some(stmt) => stmt,
         None => {
-            println!("Hitting degenerate case.");
+            debug!("Hitting degenerate case.");
             let expr = gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), stmts);
             return expr.to_tokens(ecx);
         }
@@ -354,7 +376,7 @@ fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<To
             }
         }
         StmtKind::Expr(ref expr) => {
-            println!("Parsing regular expr: {:?}", expr);
+            debug!("Parsing regular expr: {:?}", expr);
             gen_expr(ecx, input, &wild, expr, stmts).to_tokens(ecx)
         }
         StmtKind::Semi(ref expr) => {
