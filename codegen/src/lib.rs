@@ -186,7 +186,7 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
             param_expr.node = ExprKind::Tup(new_exprs);
             P(param_expr)
         }
-        ExprKind::Path(..) | ExprKind::Lit(..) => {
+        ExprKind::Path(..) | ExprKind::Lit(..) | ExprKind::Closure(..) => {
             param
         }
         _ => {
