@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
 
 pub trait Length {
     fn len(&self) -> usize;
@@ -26,19 +26,25 @@ pub trait Input: Sized + Debug {
     type Token: PartialEq + Copy + Debug;
     type Slice: PartialEq + Copy + Debug + Length;
     type Many: Length;
+    type Context: Display;
 
     fn peek(&mut self) -> Option<Self::Token>;
     fn peek_slice(&mut self, Self::Slice) -> Option<Self::Slice>;
     fn advance(&mut self, usize);
     fn is_empty(&mut self) -> bool;
-    fn take_many<F: Fn(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
-    fn skip_many<F: Fn(Self::Token) -> bool>(&mut self, cond: F) -> usize;
+    fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
+    fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> usize;
+
+    fn context(&mut self) -> Option<Self::Context> {
+        None
+    }
 }
 
 impl<'a> Input for &'a str {
     type Token = char;
     type Slice = &'a str;
     type Many = Self::Slice;
+    type Context = &'a str;
 
     fn peek(&mut self) -> Option<Self::Token> {
         self.chars().next()
@@ -52,13 +58,13 @@ impl<'a> Input for &'a str {
     }
 
     fn skip_many<F>(&mut self, cond: F) -> usize
-        where F: Fn(Self::Token) -> bool
+        where F: FnMut(Self::Token) -> bool
     {
         self.take_many(cond).len()
     }
 
-    fn take_many<F>(&mut self, cond: F) -> Self::Many
-        where F: Fn(Self::Token) -> bool
+    fn take_many<F>(&mut self, mut cond: F) -> Self::Many
+        where F: FnMut(Self::Token) -> bool
     {
         for (i, c) in self.chars().enumerate() {
             if !cond(c) {
@@ -79,6 +85,79 @@ impl<'a> Input for &'a str {
 
     fn is_empty(&mut self) -> bool {
         str::is_empty(self)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct Position {
+    line: usize,
+    column: usize,
+    offset: usize
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "line: {}, column: {}", self.line, self.column)
+    }
+}
+
+#[derive(Debug)]
+pub struct Text<'a> {
+    start: &'a str,
+    current: &'a str
+}
+
+impl<'a> From<&'a str> for Text<'a> {
+    fn from(start: &'a str) -> Text {
+        Text { start: start, current: start }
+    }
+}
+
+impl<'a> Input for Text<'a> {
+    type Token = char;
+    type Slice = &'a str;
+    type Many = Self::Slice;
+    type Context = Position;
+
+    fn peek(&mut self) -> Option<Self::Token> {
+        self.current.peek()
+    }
+
+    fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
+        self.current.peek_slice(slice)
+    }
+
+    fn skip_many<F>(&mut self, cond: F) -> usize
+        where F: FnMut(Self::Token) -> bool
+    {
+        self.current.skip_many(cond)
+    }
+
+    fn take_many<F>(&mut self, cond: F) -> Self::Many
+        where F: FnMut(Self::Token) -> bool
+    {
+        self.current.take_many(cond)
+    }
+
+    fn advance(&mut self, count: usize) {
+        self.current.advance(count)
+    }
+
+    fn is_empty(&mut self) -> bool {
+        self.current.is_empty()
+    }
+
+    fn context(&mut self) -> Option<Position> {
+        let bytes_read = self.start.len() - self.current.len();
+        let pos = if bytes_read == 0 {
+            Position { line: 0, column: 0, offset: 0 }
+        } else {
+            let string_read = &self.start[..bytes_read];
+            let (count, last_line) = string_read.lines().enumerate().last().unwrap();
+            Position { line: count + 1, column: last_line.len(), offset: bytes_read }
+        };
+
+        Some(pos)
     }
 }
 
@@ -183,13 +262,14 @@ impl<'s> Input for StringFile<'s> {
     type Token = char;
     type Slice = &'s str;
     type Many = String;
+    type Context = &'s str;
 
     // If we took Self::Token here, we'd know the length of the character.
     fn peek(&mut self) -> Option<Self::Token> {
         self.peek_char()
     }
 
-    fn take_many<F: Fn(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many {
+    fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, mut cond: F) -> Self::Many {
         let mut result = String::new();
         while let Some(c) = self.peek_char() {
             if cond(c) {
@@ -203,7 +283,7 @@ impl<'s> Input for StringFile<'s> {
         result
     }
 
-    fn skip_many<F: Fn(Self::Token) -> bool>(&mut self, cond: F) -> usize {
+    fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, mut cond: F) -> usize {
         let mut taken = 0;
         while let Some(c) = self.peek_char() {
             if cond(c) {
@@ -254,6 +334,7 @@ impl<'a> Input for &'a [u8] {
     type Token = u8;
     type Slice = &'a [u8];
     type Many = Self::Slice;
+    type Context = &'a str;
 
     #[inline]
     fn peek(&mut self) -> Option<Self::Token> {
@@ -271,13 +352,13 @@ impl<'a> Input for &'a [u8] {
     }
 
     fn skip_many<F>(&mut self, cond: F) -> usize
-        where F: Fn(Self::Token) -> bool
+        where F: FnMut(Self::Token) -> bool
     {
         self.take_many(cond).len()
     }
 
-    fn take_many<F>(&mut self, cond: F) -> Self::Many
-        where F: Fn(Self::Token) -> bool
+    fn take_many<F>(&mut self, mut cond: F) -> Self::Many
+        where F: FnMut(Self::Token) -> bool
     {
         for (i, c) in self.iter().enumerate() {
             if !cond(*c) {

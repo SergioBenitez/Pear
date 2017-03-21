@@ -1,29 +1,29 @@
 [root]
-name = "peach_codegen"
+name = "pear_codegen"
 version = "0.1.0"
 
 [[package]]
 name = "exprs"
 version = "0.0.0"
 dependencies = [
- "peach 0.1.0",
- "peach_codegen 0.1.0",
+ "pear 0.1.0",
+ "pear_codegen 0.1.0",
 ]
 
 [[package]]
 name = "http_version"
 version = "0.0.0"
 dependencies = [
- "peach 0.1.0",
- "peach_codegen 0.1.0",
+ "pear 0.1.0",
+ "pear_codegen 0.1.0",
 ]
 
 [[package]]
 name = "ini"
 version = "0.0.0"
 dependencies = [
- "peach 0.1.0",
- "peach_codegen 0.1.0",
+ "pear 0.1.0",
+ "pear_codegen 0.1.0",
  "time 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -45,12 +45,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "media_type"
 version = "0.0.0"
 dependencies = [
- "peach 0.1.0",
- "peach_codegen 0.1.0",
+ "pear 0.1.0",
+ "pear_codegen 0.1.0",
 ]
 
 [[package]]
-name = "peach"
+name = "parens"
+version = "0.0.0"
+dependencies = [
+ "pear 0.1.0",
+ "pear_codegen 0.1.0",
+ "time 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "pear"
 version = "0.1.0"
 
 [[package]]

@@ -71,7 +71,7 @@ pub fn peek_slice<I: Input>(input: &mut I, slice: I::Slice) -> ParseResult<I, I:
 
 #[inline]
 pub fn skip_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, ()>
-    where F: Fn(I::Token) -> bool
+    where F: FnMut(I::Token) -> bool
 {
     input.skip_many(condition);
     Done(())
@@ -79,7 +79,7 @@ pub fn skip_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, ()
 
 #[inline]
 pub fn take_some_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I::Many>
-    where F: Fn(I::Token) -> bool
+    where F: FnMut(I::Token) -> bool
 {
     let value = input.take_many(condition);
     if value.len() == 0 {
@@ -91,20 +91,28 @@ pub fn take_some_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<
 
 #[inline]
 pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I::Many>
-    where F: Fn(I::Token) -> bool
+    where F: FnMut(I::Token) -> bool
 {
     Done(input.take_many(condition))
 }
 
 #[inline]
-pub fn delimited<I: Input>(input: &mut I, start: I::Token, end: I::Token) -> ParseResult<I, I::Many>
+pub fn delimited<I: Input, F>(input: &mut I,
+                              start: I::Token,
+                              mut cond: F,
+                              end: I::Token) -> ParseResult<I, I::Many>
+    where F: FnMut(I::Token) -> bool
 {
+    if let Some(context) = input.context() {
+        println!("Start: {}", context);
+    }
+
     if let Error(mut e) = eat(input, start) {
         e.parser = "delimited";
         return Error(e);
     }
 
-    let output = match take_some_while(input, |c| c != end) {
+    let output = match take_some_while(input, |c| c != end && cond(c)) {
         Done(output) => output,
         Error(mut e) => {
             e.parser = "delimited";
@@ -114,6 +122,9 @@ pub fn delimited<I: Input>(input: &mut I, start: I::Token, end: I::Token) -> Par
 
     if let Error(mut e) = eat(input, end) {
         e.parser = "delimited";
+        if let Some(context) = input.context() {
+            println!("End: {}", context);
+        }
         return Error(e);
     }
 

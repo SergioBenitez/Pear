@@ -51,11 +51,11 @@ macro_rules! any {
 macro_rules! maybe {
     ($input:expr, $value:expr) => ({
         match parse!($input, $value) {
-            $crate::ParseResult::Done(_) => {
-                $crate::ParseResult::Done(())
+            $crate::ParseResult::Done(val) => {
+                $crate::ParseResult::Done(Some(val))
             }
             $crate::ParseResult::Error(_) => {
-                $crate::ParseResult::Done(())
+                $crate::ParseResult::Done(None)
             }
         }
     })
@@ -168,12 +168,12 @@ macro_rules! ignore {
     ($($inner:tt)*) => ($($inner)*)
 }
 
-#[macro_export]
-macro_rules! lift {
-    ($($inner:tt)*) => (
-        ::pear::ParseResult::Done($input, $($inner)*)
-    )
-}
+// #[macro_export]
+// macro_rules! lift {
+//     ($input:expr, $name:ident($($inner:tt)*)) => {
+//         ::pear::ParseResult::Done(|i| $name(i, $($inner)*))
+//     }
+// }
 
 #[macro_export]
 macro_rules! from {

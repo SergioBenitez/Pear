@@ -6,7 +6,7 @@ extern crate time;
 
 use std::fmt;
 
-use pear::ParseResult;
+use pear::{ParseResult, Input, Text};
 use pear::parsers::*;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -42,18 +42,21 @@ impl<'s> fmt::Display for IniConfig<'s> {
     }
 }
 
+trait StrLikeInput<'a>: Input<Token=char, Slice=&'a str, Many=&'a str> {  }
+impl<'a, T: Input<Token=char, Slice=&'a str, Many=&'a str> + 'a> StrLikeInput<'a> for T {  }
+
 #[inline]
 fn is_whitespace(byte: char) -> bool {
     byte == ' ' || byte == '\t' || byte == '\n'
 }
 
 #[parser]
-fn heading<'a>(input: &mut &'a str) -> ParseResult<&'a str, &'a str> {
-    delimited('[', ']')
+fn heading<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, &'a str> {
+    delimited('[', |c| !is_whitespace(c), ']')
 }
 
 #[parser]
-fn properties<'a>(input: &mut &'a str) -> ParseResult<&'a str, Vec<Property<'a>>> {
+fn properties<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, Vec<Property<'a>>> {
     let mut properties = Vec::new();
     repeat! {
         skip_while(is_whitespace);
@@ -74,7 +77,7 @@ fn properties<'a>(input: &mut &'a str) -> ParseResult<&'a str, Vec<Property<'a>>
 }
 
 #[parser]
-fn ini<'a>(ini_string: &mut &'a str) -> ParseResult<&'a str, IniConfig<'a>> {
+fn ini<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, IniConfig<'a>> {
     let mut sections = Vec::new();
     repeat! {
         skip_while(is_whitespace);
@@ -128,7 +131,7 @@ a=1
 ";
 
     let start = time::precise_time_ns();
-    let result = ini(&mut &*ini_string);
+    let result = ini(&mut Text::from(ini_string));
     let end = time::precise_time_ns();
 
     if let ParseResult::Error(ref e) = result {

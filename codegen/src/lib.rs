@@ -227,9 +227,13 @@ fn gen_expr(ecx: &ExtCtxt,
                 let remake = |new_params| ExprKind::Call(fn_name, new_params);
                 remonad_params(ecx, input, binding, expr, params, false, remake)
             } else {
-                println!("not whitelisted! inserted input");
+                println!("not whitelisted! inserted input for: {:?}", fn_name);
                 let remake = |mut new_params: Vec<P<Expr>>| {
-                    new_params.insert(0, input.clone());
+                    // Ensure we don't insert the input twice.
+                    if new_params.is_empty() || &new_params[0] != input {
+                        new_params.insert(0, input.clone());
+                    }
+
                     ExprKind::Call(fn_name, new_params)
                 };
                 remonad_params(ecx, input, binding, expr, params, true, remake)
@@ -291,6 +295,18 @@ fn gen_expr(ecx: &ExtCtxt,
         }
         ExprKind::Continue(..) => {
             P(unwrapped_expr)
+        }
+        ExprKind::If(ref cond_expr, ref block, ref else_block) => {
+            ecx.span_warn(cond_expr.span, "this expression is not being lifted");
+
+            let wild = ecx.pat_wild(DUMMY_SP);
+            let new_else = match *else_block {
+                Some(ref block) => gen_expr(ecx, input, &wild, block, VecDeque::new()),
+                None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
+            };
+
+            let new_block = gen_stmt(ecx, input, VecDeque::from(block.stmts.clone()));
+            quote_expr!(ecx, if $cond_expr { $new_block } else { $new_else })
         }
         ExprKind::Path(..) | ExprKind::Lit(..) => {
             quote_expr!(ecx, ::pear::ParseResult::Done($expr))
