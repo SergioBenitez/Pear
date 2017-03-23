@@ -49,19 +49,20 @@ fn media_type<'a>(input: &mut &'a str) -> ParseResult<&'a str, MediaType<'a>> {
     eat('/');
     let sub = take_some_while(is_valid_token);
 
-    // OWS* ; OWS*
-    let mut params = Vec::new();
-    try_repeat! {
-        surrounded(|i| eat(i, ';'), is_whitespace);
-        let key = take_some_while(|c| is_valid_token(c) && c != '=');
-        eat('=');
+    let mut params = vec![];
+    switch_repeat! {
+        surrounded(|i| eat(i, ';'), is_whitespace) => {
+            let key = take_some_while(|c| is_valid_token(c) && c != '=');
+            eat('=');
 
-        let value = switch! {
-            peek('"') => quoted_string(),
-            _ => take_some_while(|c| is_valid_token(c) && c != ';')
-        };
+            let value = switch! {
+                peek('"') => quoted_string(),
+                _ => take_some_while(|c| is_valid_token(c) && c != ';')
+            };
 
-        params.push((key, value))
+            params.push((key, value))
+        },
+        _ => break
     }
 
     MediaType { top: top, sub: sub, params: params }
@@ -74,18 +75,7 @@ fn parse_media_type(mut input: &str) -> ParseResult<&str, MediaType> {
 
 #[parser]
 fn accept<'a>(input: &mut &'a str) -> ParseResult<&'a str, Vec<MediaType<'a>>> {
-    let mut media_types = Vec::new();
-    repeat! {
-        let media_type = media_type();
-        switch! {
-            eat(',') => skip_while(is_whitespace),
-            _ => ()
-        };
-
-        media_types.push(media_type);
-    }
-
-    media_types
+    collect!((skip_while(is_whitespace), media_type()).1, eat(','))
 }
 
 fn main() {

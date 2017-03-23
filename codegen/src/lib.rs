@@ -258,7 +258,6 @@ fn gen_expr(ecx: &ExtCtxt,
             }
         }
         ExprKind::MethodCall(sp, ty, params) => {
-            ecx.span_warn(sp.span, "this is getting called");
             let remake = |new_params| ExprKind::MethodCall(sp, ty, new_params);
             remonad_params(ecx, input, binding, expr, params, false, remake)
         }

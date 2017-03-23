@@ -88,33 +88,6 @@ macro_rules! maybe {
     })
 }
 
-// This one gives you the last result, while `repeat` does not.
-#[macro_export]
-macro_rules! many {
-    ($input:expr, $($inner:tt)*) => ({
-        #[warn(unused_assignments)]
-        let mut result = parse!($input, { $($inner)* });
-        loop {
-            if let $crate::ParseResult::Done(_) = $crate::parsers::eof($input) {
-                break;
-            }
-
-            match result {
-                $crate::ParseResult::Done(_) => {
-                    result = parse!($input, { $($inner)* });
-                    continue;
-                },
-                $crate::ParseResult::Error(e) => {
-                    result = $crate::ParseResult::Error(e);
-                    break;
-                }
-            }
-        }
-
-        result
-    });
-}
-
 #[macro_export]
 macro_rules! repeat {
     ($input:expr, $($inner:tt)*) => ({
@@ -184,6 +157,11 @@ macro_rules! repeat_while {
 
         _result
     });
+}
+
+#[macro_export]
+macro_rules! switch_repeat {
+    ($input:expr, $($cases:tt)*) => (repeat!($input, switch!($($cases)*)))
 }
 
 #[macro_export]
