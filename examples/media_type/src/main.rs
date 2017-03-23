@@ -34,15 +34,9 @@ fn quoted_string<'a>(input: &mut &'a str) -> ParseResult<&'a str, &'a str> {
 
     let mut is_escaped = false;
     let inner = take_while(|c| {
-        if is_escaped {
-            is_escaped = false;
-            true
-        } else if c == '\\' {
-            is_escaped = true;
-            true
-        } else {
-            c != '"'
-        }
+        if is_escaped { is_escaped = false; return true; }
+        if c == '\\' { is_escaped = true; return true; }
+        c != '"'
     });
 
     eat('"');

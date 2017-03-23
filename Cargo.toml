@@ -7,4 +7,5 @@ members = [
   "examples/media_type",
   "examples/exprs",
   "examples/parens",
+  "examples/json",
 ]

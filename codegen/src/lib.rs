@@ -72,11 +72,12 @@ fn parser_decorator(ecx: &mut ExtCtxt,
             let mut new_item = item.clone().unwrap();
             new_item.node = node;
 
-            if block.stmts.len() > 3 {
+            if block.stmts.len() > 6 {
                 new_item.attrs.push(quote_attr!(ecx, #[inline]));
             } else {
                 new_item.attrs.push(quote_attr!(ecx, #[inline(always)]));
             }
+
             return Annotatable::Item(P(new_item))
         }
     }
@@ -257,6 +258,7 @@ fn gen_expr(ecx: &ExtCtxt,
             }
         }
         ExprKind::MethodCall(sp, ty, params) => {
+            ecx.span_warn(sp.span, "this is getting called");
             let remake = |new_params| ExprKind::MethodCall(sp, ty, new_params);
             remonad_params(ecx, input, binding, expr, params, false, remake)
         }
@@ -285,6 +287,10 @@ fn gen_expr(ecx: &ExtCtxt,
         ExprKind::TupField(indexed_expr, i) => {
             let remake = |new_expr: Vec<P<Expr>>| ExprKind::TupField(new_expr[0].clone(), i);
             remonad_params(ecx, input, binding, expr, vec![indexed_expr], false, remake)
+        }
+        ExprKind::Unary(op, uexpr) => {
+            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Unary(op, new_expr[0].clone());
+            remonad_params(ecx, input, binding, expr, vec![uexpr], false, remake)
         }
         ExprKind::Struct(path, fields, base) => {
             if let Some(ref base) = base {

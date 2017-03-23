@@ -5,18 +5,21 @@ pub trait Length {
 }
 
 impl<'a> Length for &'a str {
+    #[inline(always)]
     fn len(&self) -> usize {
         str::len(self)
     }
 }
 
 impl<'a> Length for &'a [u8] {
+    #[inline(always)]
     fn len(&self) -> usize {
         <[u8]>::len(self)
     }
 }
 
 impl Length for String {
+    #[inline(always)]
     fn len(&self) -> usize {
         String::len(self)
     }
@@ -35,6 +38,7 @@ pub trait Input: Sized + Debug {
     fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
     fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> usize;
 
+    #[inline(always)]
     fn context(&mut self) -> Option<Self::Context> {
         None
     }
@@ -46,10 +50,12 @@ impl<'a> Input for &'a str {
     type Many = Self::Slice;
     type Context = &'a str;
 
+    #[inline(always)]
     fn peek(&mut self) -> Option<Self::Token> {
         self.chars().next()
     }
 
+    #[inline(always)]
     fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
         match self.len() >= slice.len() {
             true => Some(&self[..slice.len()]),
@@ -57,12 +63,14 @@ impl<'a> Input for &'a str {
         }
     }
 
+    #[inline(always)]
     fn skip_many<F>(&mut self, cond: F) -> usize
         where F: FnMut(Self::Token) -> bool
     {
         self.take_many(cond).len()
     }
 
+    #[inline]
     fn take_many<F>(&mut self, mut cond: F) -> Self::Many
         where F: FnMut(Self::Token) -> bool
     {
@@ -79,10 +87,12 @@ impl<'a> Input for &'a str {
         value
     }
 
+    #[inline(always)]
     fn advance(&mut self, count: usize) {
         *self = &self[count..];
     }
 
+    #[inline(always)]
     fn is_empty(&mut self) -> bool {
         str::is_empty(self)
     }
@@ -96,6 +106,7 @@ pub struct Position {
 }
 
 impl Display for Position {
+    #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "line: {}, column: {}", self.line, self.column)
     }
@@ -108,6 +119,7 @@ pub struct Text<'a> {
 }
 
 impl<'a> From<&'a str> for Text<'a> {
+    #[inline(always)]
     fn from(start: &'a str) -> Text {
         Text { start: start, current: start }
     }
@@ -119,30 +131,36 @@ impl<'a> Input for Text<'a> {
     type Many = Self::Slice;
     type Context = Position;
 
+    #[inline(always)]
     fn peek(&mut self) -> Option<Self::Token> {
         self.current.peek()
     }
 
+    #[inline(always)]
     fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
         self.current.peek_slice(slice)
     }
 
+    #[inline(always)]
     fn skip_many<F>(&mut self, cond: F) -> usize
         where F: FnMut(Self::Token) -> bool
     {
         self.current.skip_many(cond)
     }
 
+    #[inline(always)]
     fn take_many<F>(&mut self, cond: F) -> Self::Many
         where F: FnMut(Self::Token) -> bool
     {
         self.current.take_many(cond)
     }
 
+    #[inline(always)]
     fn advance(&mut self, count: usize) {
         self.current.advance(count)
     }
 
+    #[inline(always)]
     fn is_empty(&mut self) -> bool {
         self.current.is_empty()
     }
@@ -183,15 +201,17 @@ pub struct StringFile<'s> {
 }
 
 impl<'s> StringFile<'s> {
-    // use asref path
+    #[inline(always)]
     pub fn open(path: &str) -> io::Result<StringFile<'s>> {
         Ok(StringFile::new(File::open(path)?, 1024))
     }
 
+    #[inline(always)]
     pub fn open_with_cap(path: &str, cap: usize) -> io::Result<StringFile<'s>> {
         Ok(StringFile::new(File::open(path)?, cap))
     }
 
+    #[inline(always)]
     pub fn new(file: File, cap: usize) -> StringFile<'s> {
         StringFile {
             buffer: vec![0; cap],
@@ -222,6 +242,7 @@ impl<'s> StringFile<'s> {
     }
 
     // Panics if at least `num` aren't available.
+    #[inline(always)]
     fn peek_bytes(&self, num: usize) -> &[u8] {
         &self.buffer[self.consumed..(self.consumed + num)]
     }
@@ -265,6 +286,7 @@ impl<'s> Input for StringFile<'s> {
     type Context = &'s str;
 
     // If we took Self::Token here, we'd know the length of the character.
+    #[inline(always)]
     fn peek(&mut self) -> Option<Self::Token> {
         self.peek_char()
     }
@@ -318,10 +340,12 @@ impl<'s> Input for StringFile<'s> {
         }
     }
 
+    #[inline(always)]
     fn advance(&mut self, count: usize) {
         self.consume(count);
     }
 
+    #[inline(always)]
     fn is_empty(&mut self) -> bool {
         match self.read_into_peek(1) {
             Ok(0) | Err(_) => true,
@@ -336,7 +360,7 @@ impl<'a> Input for &'a [u8] {
     type Many = Self::Slice;
     type Context = &'a str;
 
-    #[inline]
+    #[inline(always)]
     fn peek(&mut self) -> Option<Self::Token> {
         match self.is_empty() {
             true => None,
@@ -344,6 +368,7 @@ impl<'a> Input for &'a [u8] {
         }
     }
 
+    #[inline(always)]
     fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
         match self.len() >= slice.len() {
             true => Some(&self[..slice.len()]),
@@ -351,6 +376,7 @@ impl<'a> Input for &'a [u8] {
         }
     }
 
+    #[inline(always)]
     fn skip_many<F>(&mut self, cond: F) -> usize
         where F: FnMut(Self::Token) -> bool
     {
@@ -383,4 +409,3 @@ impl<'a> Input for &'a [u8] {
         self.len() == 0
     }
 }
-

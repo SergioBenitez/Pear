@@ -55,6 +55,7 @@ pub struct ParseError<I: Input> {
 }
 
 impl<I: Input> fmt::Display for ParseError<I> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "'{}': {}", self.parser, self.expected)
     }
@@ -67,6 +68,7 @@ pub enum ParseResult<I: Input, R> {
 }
 
 impl<I: Input, R> ParseResult<I, R> {
+    #[inline(always)]
     pub fn unwrap(self) -> R {
         match self {
             Done(result) => result,
@@ -74,6 +76,7 @@ impl<I: Input, R> ParseResult<I, R> {
         }
     }
 
+    #[inline(always)]
     pub fn map<U, F: FnOnce(R) -> U>(self, f: F) -> Result<U, ParseError<I>> {
         match self {
             Done(result) => Ok(f(result)),
@@ -83,6 +86,7 @@ impl<I: Input, R> ParseResult<I, R> {
 }
 
 impl<I: Input, T, E: fmt::Display> From<Result<T, E>> for ParseResult<I, T> {
+    #[inline]
     fn from(result: Result<T, E>) -> ParseResult<I, T> {
         match result {
             Ok(val) => ParseResult::Done(val),
@@ -95,11 +99,13 @@ impl<I: Input, T, E: fmt::Display> From<Result<T, E>> for ParseResult<I, T> {
 }
 
 impl<I: Input, R> Into<Result<R, ParseError<I>>> for ParseResult<I, R> {
+    #[inline(always)]
     fn into(self) -> Result<R, ParseError<I>> {
         self.map(|r| r)
     }
 }
 
+#[inline(always)]
 pub fn error<I: Input, R>(parser: &'static str, expected: Expected<I>) -> ParseResult<I, R> {
     Error(ParseError { parser: parser, expected: expected })
 }

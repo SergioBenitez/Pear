@@ -89,7 +89,7 @@ pub fn take_some_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<
     Done(value)
 }
 
-#[inline]
+#[inline(always)]
 pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I::Many>
     where F: FnMut(I::Token) -> bool
 {
@@ -103,10 +103,6 @@ pub fn delimited<I: Input, F>(input: &mut I,
                               end: I::Token) -> ParseResult<I, I::Many>
     where F: FnMut(I::Token) -> bool
 {
-    if let Some(context) = input.context() {
-        println!("Start: {}", context);
-    }
-
     if let Error(mut e) = eat(input, start) {
         e.parser = "delimited";
         return Error(e);
@@ -122,16 +118,13 @@ pub fn delimited<I: Input, F>(input: &mut I,
 
     if let Error(mut e) = eat(input, end) {
         e.parser = "delimited";
-        if let Some(context) = input.context() {
-            println!("End: {}", context);
-        }
         return Error(e);
     }
 
     Done(output)
 }
 
-#[inline]
+#[inline(always)]
 pub fn eof<I: Input>(input: &mut I) -> ParseResult<I, ()> {
     if input.is_empty() {
         Done(())
