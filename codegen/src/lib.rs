@@ -119,11 +119,8 @@ fn parse_macro<'a>(mut parser: Parser<'a>, ecx: &mut ExtCtxt<'a>, _: Span) -> PR
     Ok(gen_expr(ecx, &input_expr, &wild, &output_expr, VecDeque::new()))
 }
 
-static FN_WHITELIST: &'static [&'static str] = &[
-    "Box", "Some", "Ok", "Err", "String", "Vec", "drop", "Result", "Option",
-    "Default", "BTreeMap", "BTreeSet", "BinaryHeap", "HashMap", "HashSet",
-    "LinkedList", "VecDeque",
-];
+static FN_PENULTIMATE_WHITELIST: &'static [&'static str] = &["str"];
+static FN_END_WHITELIST: &'static [&'static str] = &["drop", "from_utf8"];
 
 static MACRO_WHITELIST: &'static [&'static str] = &[
     "println", "format", "panic", "print",  "vec", "write", "writeln",
@@ -133,10 +130,19 @@ static MACRO_WHITELIST: &'static [&'static str] = &[
 
 fn is_whitelisted_fn(expr: &P<Expr>) -> bool {
     if let ExprKind::Path(_, ref path) = expr.node {
-        let first_ident = path.segments[0].identifier.name.as_str();
-        // FIXME: Only check the last path segment for uppercase!
-        first_ident.starts_with(char::is_uppercase) ||
-            FN_WHITELIST.iter().any(|val| &&*first_ident == val)
+        // Check the penultimate segment, if there is one.
+        let num_segs = path.segments.len();
+        if num_segs > 1 {
+            let penultimate = path.segments[num_segs - 2].identifier.name.as_str();
+            let is_whitelisted = penultimate.starts_with(char::is_uppercase)
+                || FN_PENULTIMATE_WHITELIST.iter().any(|v| &&*penultimate == v);
+            if is_whitelisted { return true; }
+        }
+
+        // Check the last segment.
+        let last = path.segments[num_segs - 1].identifier.name.as_str();
+        last.starts_with(char::is_uppercase)
+            || FN_END_WHITELIST.iter().any(|v| &&*last == v)
     } else {
         false
     }

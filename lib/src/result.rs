@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 
 use Input;
@@ -7,7 +8,7 @@ use ParseResult::*;
 pub enum Expected<I: Input> {
     Token(Option<I::Token>, Option<I::Token>),
     Slice(Option<I::Slice>, Option<I::Slice>),
-    Custom(String),
+    Custom(Cow<'static, str>),
     EOF
 }
 
@@ -54,6 +55,18 @@ pub struct ParseError<I: Input> {
     pub expected: Expected<I>
 }
 
+impl<I: Input> ParseError<I> {
+    #[inline(always)]
+    pub fn custom<T, R>(parser: &'static str, message: T) -> ParseResult<I, R>
+        where T: Into<Cow<'static, str>>
+    {
+        ParseResult::Error(ParseError {
+            parser: parser,
+            expected: Expected::Custom(message.into())
+        })
+    }
+}
+
 impl<I: Input> fmt::Display for ParseError<I> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -92,7 +105,7 @@ impl<I: Input, T, E: fmt::Display> From<Result<T, E>> for ParseResult<I, T> {
             Ok(val) => ParseResult::Done(val),
             Err(e) => ParseResult::Error(ParseError {
                 parser: "std::Result",
-                expected: Expected::Custom(e.to_string())
+                expected: Expected::Custom(Cow::Owned(e.to_string()))
             })
         }
     }

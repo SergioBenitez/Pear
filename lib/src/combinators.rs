@@ -150,7 +150,7 @@ macro_rules! repeat_while {
                 break;
             }
 
-            if let $crate::ParseResult::Error(e) = parse!($input, $cond) {
+            if let $crate::ParseResult::Error(_) = parse!($input, $cond) {
                 break;
             }
         }
@@ -162,29 +162,6 @@ macro_rules! repeat_while {
 #[macro_export]
 macro_rules! switch_repeat {
     ($input:expr, $($cases:tt)*) => (repeat!($input, switch!($($cases)*)))
-}
-
-#[macro_export]
-macro_rules! ignore {
-    ($input:expr, $($inner:tt)*) => ($($inner)*);
-    ($($inner:tt)*) => ($($inner)*)
-}
-
-// #[macro_export]
-// macro_rules! lift {
-//     ($input:expr, $name:ident($($inner:tt)*)) => {
-//         ::pear::ParseResult::Done(|i| $name(i, $($inner)*))
-//     }
-// }
-
-#[macro_export]
-macro_rules! from {
-    ($input:expr, $result:expr) => ({
-        match parse!($input, $result) {
-            $crate::ParseResult::Done(result) => $crate::ParseResult::from(result),
-            $crate::ParseResult::Error(e) => $crate::ParseResult::Error(e)
-        }
-    });
 }
 
 #[macro_export]

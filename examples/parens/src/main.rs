@@ -4,8 +4,6 @@
 #[macro_use] extern crate pear;
 extern crate time;
 
-use std::fmt;
-
 use pear::{ParseResult, Input, Text};
 use pear::parsers::*;
 
