@@ -1,6 +1,6 @@
 [package]
 name = "pear"
-version = "0.0.5"
+version = "0.0.6"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A pear is a fruit."
 license = "MIT/Apache-2.0"
