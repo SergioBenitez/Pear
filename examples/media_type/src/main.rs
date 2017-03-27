@@ -74,8 +74,24 @@ fn parse_media_type(mut input: &str) -> ParseResult<&str, MediaType> {
 }
 
 #[parser]
-fn accept<'a>(input: &mut &'a str) -> ParseResult<&'a str, Vec<MediaType<'a>>> {
-    collect!((skip_while(is_whitespace), media_type()).1, eat(','))
+fn accept<'a>(input: &mut &'a str) -> ParseResult<&'a str, Vec<(MediaType<'a>, Option<f32>)>> {
+    let mut media_types = vec![];
+    repeat_while!(eat(','), {
+        skip_while(is_whitespace);
+        let media_type = media_type();
+        let weight = match media_type.params.iter().next() {
+            Some(&("q", value)) => match value.parse::<f32>().ok() {
+                Some(q) if q > 1.0 => parse_error!("accept", "a"),
+                Some(q) => Some(q),
+                None => parse_error!("accept", "b")
+            },
+            _ => None
+        };
+
+        media_types.push((media_type, weight));
+    });
+
+    media_types
 }
 
 fn main() {
@@ -83,4 +99,5 @@ fn main() {
     println!("MEDIA TYPE: {:?}", parse_media_type("a/b; a=\"ab=\\\"c\\\"\"; c=d"));
     println!("MEDIA TYPE: {:?}", parse_media_type("a/b; a=b; c=d"));
     println!("ACCEPT: {:?}", accept(&mut "a/b; a=b, c/d"));
+    println!("ACCEPT: {:?}", accept(&mut "a/b; q=0.7, c/d"));
 }

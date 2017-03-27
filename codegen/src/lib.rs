@@ -328,17 +328,40 @@ fn gen_expr(ecx: &ExtCtxt,
         ExprKind::Continue(..) => {
             P(unwrapped_expr)
         }
-        ExprKind::If(ref cond_expr, ref block, ref else_block) => {
+        ExprKind::If(cond_expr, block, else_block) => {
             ecx.span_warn(cond_expr.span, "this expression is not being lifted");
 
             let wild = ecx.pat_wild(DUMMY_SP);
-            let new_else = match *else_block {
+            let new_else = match else_block {
                 Some(ref block) => gen_expr(ecx, input, &wild, block, VecDeque::new()),
                 None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
             };
 
-            let new_block = gen_stmt(ecx, input, VecDeque::from(block.stmts.clone()));
+            let new_block = gen_stmt(ecx, input, VecDeque::from(block.unwrap().stmts));
             quote_expr!(ecx, if $cond_expr { $new_block } else { $new_else })
+        }
+        ExprKind::IfLet(pat, pat_expr, true_block, else_block) => {
+            ecx.span_warn(pat_expr.span, "this expression is not being lifted");
+
+            let wild = ecx.pat_wild(DUMMY_SP);
+            let new_else = match else_block {
+                Some(ref block) => gen_expr(ecx, input, &wild, block, VecDeque::new()),
+                None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
+            };
+
+            let new_block = gen_stmt(ecx, input, VecDeque::from(true_block.unwrap().stmts));
+            quote_expr!(ecx, if let $pat = $pat_expr { $new_block } else { $new_else })
+        }
+        ExprKind::Match(expr, mut arms) => {
+            ecx.span_warn(expr.span, "this expression is not being lifted");
+
+            let wild = ecx.pat_wild(DUMMY_SP);
+            for arm in &mut arms {
+                arm.body = gen_expr(ecx, input, &wild, &arm.body, VecDeque::new());
+            }
+
+            unwrapped_expr.node = ExprKind::Match(expr, arms);
+            P(unwrapped_expr)
         }
         ExprKind::Path(..) | ExprKind::Lit(..) => {
             quote_expr!(ecx, ::pear::ParseResult::Done($expr))
