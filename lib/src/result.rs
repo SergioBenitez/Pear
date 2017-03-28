@@ -96,6 +96,14 @@ impl<I: Input, R> ParseResult<I, R> {
             Error(e) => Err(e)
         }
     }
+
+    #[inline(always)]
+    pub fn ok(self) -> Option<R> {
+        match self {
+            Done(result) => Some(result),
+            Error(_) => None
+        }
+    }
 }
 
 impl<I: Input, T, E: fmt::Display> From<Result<T, E>> for ParseResult<I, T> {
