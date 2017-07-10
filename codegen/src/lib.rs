@@ -263,8 +263,8 @@ fn gen_expr(ecx: &ExtCtxt,
                 remonad_params(ecx, input, binding, expr, params, true, remake)
             }
         }
-        ExprKind::MethodCall(sp, ty, params) => {
-            let remake = |new_params| ExprKind::MethodCall(sp, ty, new_params);
+        ExprKind::MethodCall(ty, params) => {
+            let remake = |new_params| ExprKind::MethodCall(ty, new_params);
             remonad_params(ecx, input, binding, expr, params, false, remake)
         }
         ExprKind::Block(block) => {

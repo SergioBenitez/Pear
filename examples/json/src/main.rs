@@ -149,6 +149,12 @@ mod bench {
         parse!(&mut input, (value(), eof()).0)
     }
 
+    #[bench]
+    fn canada(b: &mut Bencher) {
+        let data = include_str!("../assets/canada.json");
+        b.iter(|| parse_json(data));
+    }
+
     // This is the benchmark from PEST. Unfortunately, our parser here is fully
     // fleshed out: it actually creates the `value`, while the PEST one just checks
     // if it parses. As a result, our parser will be much slower. You can immitate
