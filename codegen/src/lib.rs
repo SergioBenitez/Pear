@@ -193,6 +193,11 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
             param_expr.node = ExprKind::Tup(new_exprs);
             P(param_expr)
         }
+        ExprKind::AddrOf(mutability, expr) => {
+            let new_expr = remonad_param(ecx, expr, stmts);
+            param_expr.node = ExprKind::AddrOf(mutability, new_expr);
+            P(param_expr)
+        }
         ExprKind::Path(..) | ExprKind::Lit(..) | ExprKind::Closure(..) => {
             param
         }
