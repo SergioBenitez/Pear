@@ -7,3 +7,7 @@ license = "MIT/Apache-2.0"
 
 [lib]
 plugin = true
+
+[build-dependencies]
+yansi = "0.3"
+version_check = "0.1.3"
