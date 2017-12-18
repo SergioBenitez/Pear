@@ -4,6 +4,20 @@ pub trait Length {
     fn len(&self) -> usize;
 }
 
+impl Length for str {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        str::len(self)
+    }
+}
+
+impl Length for [u8] {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        <[u8]>::len(self)
+    }
+}
+
 impl<'a> Length for &'a str {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -27,12 +41,13 @@ impl Length for String {
 
 pub trait Input: Sized + Debug {
     type Token: PartialEq + Copy + Debug;
-    type Slice: PartialEq + Copy + Debug + Length;
+    type Slice: PartialEq + Clone + Debug + Length;
+    type InSlice: PartialEq + Clone + Debug + Length;
     type Many: Length;
     type Context: Display;
 
     fn peek(&mut self) -> Option<Self::Token>;
-    fn peek_slice(&mut self, Self::Slice) -> Option<Self::Slice>;
+    fn peek_slice(&mut self, Self::InSlice) -> Option<Self::Slice>;
     fn advance(&mut self, usize);
     fn is_empty(&mut self) -> bool;
     fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
@@ -46,6 +61,7 @@ pub trait Input: Sized + Debug {
 
 impl<'a> Input for &'a str {
     type Token = char;
+    type InSlice = &'a str;
     type Slice = &'a str;
     type Many = Self::Slice;
     type Context = &'a str;
@@ -56,11 +72,15 @@ impl<'a> Input for &'a str {
     }
 
     #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
-        match self.len() >= slice.len() {
-            true => Some(&self[..slice.len()]),
-            false => None
+    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
+        if self.len() >= slice.len() {
+            let out_slice = &self[..slice.len()];
+            if out_slice == slice {
+                return Some(out_slice)
+            }
         }
+
+        None
     }
 
     #[inline(always)]
@@ -127,6 +147,7 @@ impl<'a> From<&'a str> for Text<'a> {
 
 impl<'a> Input for Text<'a> {
     type Token = char;
+    type InSlice = &'a str;
     type Slice = &'a str;
     type Many = Self::Slice;
     type Context = Position;
@@ -137,7 +158,7 @@ impl<'a> Input for Text<'a> {
     }
 
     #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
+    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
         self.current.peek_slice(slice)
     }
 
@@ -281,6 +302,7 @@ impl<'s> StringFile<'s> {
 
 impl<'s> Input for StringFile<'s> {
     type Token = char;
+    type InSlice = &'s str;
     type Slice = &'s str;
     type Many = String;
     type Context = &'s str;
@@ -319,7 +341,7 @@ impl<'s> Input for StringFile<'s> {
         taken
     }
 
-    fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
+    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
         let available = match self.read_into_peek(slice.len()) {
             Ok(n) => n,
             Err(_) => return None
@@ -356,6 +378,7 @@ impl<'s> Input for StringFile<'s> {
 
 impl<'a> Input for &'a [u8] {
     type Token = u8;
+    type InSlice = &'a [u8];
     type Slice = &'a [u8];
     type Many = Self::Slice;
     type Context = &'a str;
@@ -369,11 +392,15 @@ impl<'a> Input for &'a [u8] {
     }
 
     #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::Slice) -> Option<Self::Slice> {
-        match self.len() >= slice.len() {
-            true => Some(&self[..slice.len()]),
-            false => None
+    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
+        if self.len() >= slice.len() {
+            let out_slice = &self[..slice.len()];
+            if out_slice == slice {
+                return Some(out_slice)
+            }
         }
+
+        None
     }
 
     #[inline(always)]

@@ -30,8 +30,8 @@ struct Request<'a> {
     headers: Vec<Header<'a>>
 }
 
-trait ByteLikeInput<'a>: Input<Token=u8, Slice=&'a [u8], Many=&'a [u8]> {  }
-impl<'a, T: Input<Token=u8, Slice=&'a [u8], Many=&'a [u8]> + 'a> ByteLikeInput<'a> for T {  }
+trait ByteLikeInput<'a>: Input<Token=u8, InSlice=&'a [u8], Slice=&'a [u8], Many=&'a [u8]> {  }
+impl<'a, T: Input<Token=u8, InSlice=&'a [u8], Slice=&'a [u8], Many=&'a [u8]> + 'a> ByteLikeInput<'a> for T {  }
 
 #[parser]
 fn version<'a, I: ByteLikeInput<'a>>(input: &mut I) -> ParseResult<I, (u8, u8)> {

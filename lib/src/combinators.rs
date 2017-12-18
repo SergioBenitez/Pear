@@ -188,6 +188,23 @@ macro_rules! collect {
 
         $crate::ParseResult::Done(values)
     });
+
+    ($input:expr, $value:expr) => ({
+        let mut values = Vec::new();
+        #[warn(unused_assignments)]
+        loop {
+            if let $crate::ParseResult::Done(_) = eof($input) {
+                break;
+            }
+
+            match parse!($input, $value) {
+                $crate::ParseResult::Done(value) => values.push(value),
+                $crate::ParseResult::Error(_) => break
+            }
+        }
+
+        $crate::ParseResult::Done(values)
+    });
 }
 
 #[inline]

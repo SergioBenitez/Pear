@@ -3,12 +3,12 @@ macro_rules! whitelist {
     ($input:expr, $($inner:tt)*) => ($crate::ParseResult::Done($($inner)*));
 }
 
-// #[macro_export]
-// macro_rules! lift {
-//     ($input:expr, $name:ident($($inner:tt)*)) => {
-//         ::pear::ParseResult::Done(|i| $name(i, $($inner)*))
-//     }
-// }
+#[macro_export]
+macro_rules! unlift {
+    ($input:expr, $($inner:tt)*) => {
+        $($inner)*
+    }
+}
 
 #[macro_export]
 macro_rules! from {

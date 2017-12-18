@@ -4,10 +4,10 @@ use std::fmt;
 use Input;
 use ParseResult::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expected<I: Input> {
     Token(Option<I::Token>, Option<I::Token>),
-    Slice(Option<I::Slice>, Option<I::Slice>),
+    Slice(Option<I::InSlice>, Option<I::Slice>),
     Custom(Cow<'static, str>),
     EOF
 }
@@ -27,13 +27,13 @@ impl<I: Input> fmt::Display for Expected<I> {
             Expected::Token(None, None) => {
                 write!(f, "expected any token, but none was found")
             }
-            Expected::Slice(Some(expected), Some(found)) => {
+            Expected::Slice(Some(ref expected), Some(ref found)) => {
                 write!(f, "expected slice {:?}, but found {:?}", expected, found)
             }
-            Expected::Slice(None, Some(found)) => {
+            Expected::Slice(None, Some(ref found)) => {
                 write!(f, "the slice {:?} was not expected", found)
             }
-            Expected::Slice(Some(expected), None) => {
+            Expected::Slice(Some(ref expected), None) => {
                 write!(f, "expected the slice {:?}, but none was found", expected)
             }
             Expected::Slice(None, None) => {
@@ -49,7 +49,7 @@ impl<I: Input> fmt::Display for Expected<I> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParseError<I: Input> {
     pub parser: &'static str,
     pub expected: Expected<I>

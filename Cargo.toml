@@ -8,4 +8,5 @@ members = [
   "examples/exprs",
   "examples/parens",
   "examples/json",
+  "examples/uri",
 ]

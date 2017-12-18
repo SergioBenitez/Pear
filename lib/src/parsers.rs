@@ -27,11 +27,11 @@ pub fn eat_if<I: Input, F>(input: &mut I, cond: F) -> ParseResult<I, I::Token>
 }
 
 #[inline]
-pub fn eat_slice<I: Input>(input: &mut I, slice: I::Slice) -> ParseResult<I, I::Slice> {
+pub fn eat_slice<I: Input>(input: &mut I, slice: I::InSlice) -> ParseResult<I, I::Slice> {
     let len = slice.len();
-    match input.peek_slice(slice) {
-        Some(peeked) if peeked == slice => advance_and(input, len, slice),
-        t@Some(_) | t@None => error("eat_slice", Expected::Slice(Some(slice), t)),
+    match input.peek_slice(slice.clone()) {
+        Some(peeked) => advance_and(input, len, peeked),
+        t@None => error("eat_slice", Expected::Slice(Some(slice), t)),
     }
 }
 
@@ -62,10 +62,10 @@ pub fn peek_if<I: Input, F>(input: &mut I, cond: F) -> ParseResult<I, I::Token>
 }
 
 #[inline]
-pub fn peek_slice<I: Input>(input: &mut I, slice: I::Slice) -> ParseResult<I, I::Slice> {
-    match input.peek_slice(slice) {
-        Some(peeked) if peeked == slice => Done(slice),
-        t@Some(_) | t@None => error("peek_slice", Expected::Slice(Some(slice), t)),
+pub fn peek_slice<I: Input>(input: &mut I, slice: I::InSlice) -> ParseResult<I, I::Slice> {
+    match input.peek_slice(slice.clone()) {
+        Some(peeked) => Done(peeked),
+        t@None => error("peek_slice", Expected::Slice(Some(slice), t)),
     }
 }
 
@@ -94,6 +94,22 @@ pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I:
     where F: FnMut(I::Token) -> bool
 {
     Done(input.take_many(condition))
+}
+
+/// Takes at most `num` inputs.
+#[inline(always)]
+pub fn take_n<I: Input>(input: &mut I, num: usize) -> ParseResult<I, I::Many> {
+    let mut i = 0;
+    Done(input.take_many(|_| { let c = i < num; i += 1; c }))
+}
+
+/// Takes at most `num` inputs as long as `condition` holds.
+#[inline(always)]
+pub fn take_n_while<I: Input, F>(input: &mut I, num: usize, mut condition: F) -> ParseResult<I, I::Many>
+    where F: FnMut(I::Token) -> bool
+{
+    let mut i = 0;
+    Done(input.take_many(|c| { condition(c) && { let ok = i < num; i += 1; ok } }))
 }
 
 #[inline]

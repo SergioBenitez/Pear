@@ -19,8 +19,8 @@ pub enum JsonValue<'a> {
     Object(HashMap<&'a str, JsonValue<'a>>)
 }
 
-trait StrLikeInput<'a>: Input<Token=char, Slice=&'a str, Many=&'a str> {  }
-impl<'a, T: Input<Token=char, Slice=&'a str, Many=&'a str> + 'a> StrLikeInput<'a> for T {  }
+trait StrLikeInput<'a>: Input<Token=char, InSlice=&'a str, Slice=&'a str, Many=&'a str> {  }
+impl<'a, T: Input<Token=char, InSlice=&'a str, Slice=&'a str, Many=&'a str> + 'a> StrLikeInput<'a> for T {  }
 
 #[inline(always)]
 fn is_whitespace(c: char) -> bool {
@@ -29,8 +29,8 @@ fn is_whitespace(c: char) -> bool {
 
 #[parser]
 fn int<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, i64> {
-    from!(take_some_while(|c| ('0'...'9').contains(c)).parse()) // NOT BENCH
-    // take_some_while(|c| ('0'...'9').contains(c)); // BENCH
+    from!(take_some_while(|c| ('0'..='9').contains(c)).parse()) // NOT BENCH
+    // take_some_while(|c| ('0'..='9').contains(c)); // BENCH
     // 1 // BENCH
 }
 
@@ -44,7 +44,7 @@ fn signed_int<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, i64> {
 #[parser]
 fn number<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, f64> {
     let whole_num = signed_int();
-    let frac = switch! { eat('.') => take_some_while(|c| ('0'...'9').contains(c)), _ => "" };
+    let frac = switch! { eat('.') => take_some_while(|c| ('0'..='9').contains(c)), _ => "" };
     let exp = switch! { eat_if(|c| "eE".contains(c)) => signed_int(), _ => 0 };
     from!(format!("{}.{}e{}", whole_num, frac, exp).parse()) // NOT BENCH
     // 0.0 // BENCH
@@ -100,7 +100,7 @@ fn value<'a, I: StrLikeInput<'a>>(input: &mut I) -> ParseResult<I, JsonValue<'a>
         peek('{') => JsonValue::Object(object()),
         peek('[') => JsonValue::Array(array()),
         peek('"') => JsonValue::String(string()),
-        peek_if(|c| c == '-' || ('0'...'9').contains(c)) => JsonValue::Number(number())
+        peek_if(|c| c == '-' || ('0'..='9').contains(c)) => JsonValue::Number(number())
     };
 
     skip_while(is_whitespace);
