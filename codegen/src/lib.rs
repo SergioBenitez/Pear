@@ -29,7 +29,7 @@ use syntax::codemap::Spanned;
 
 macro_rules! debug {
     ($($t:tt)*) => (
-        if ::std::env::var("PEAR_CODEGEN_DEBUG").is_ok() {
+        if ::std::env::var_os("PEAR_CODEGEN_DEBUG").is_some() {
             println!($($t)*);
         }
     )
@@ -69,7 +69,7 @@ fn parser_decorator(ecx: &mut ExtCtxt,
             let new_block = ecx.block_expr(new_inner_fn);
             let node = ItemKind::Fn(decl.clone(), safety, cness, abi, generics.clone(), new_block);
 
-            let mut new_item = item.clone().unwrap();
+            let mut new_item = item.clone().into_inner();
             new_item.node = node;
 
             if block.stmts.len() > 6 {
@@ -105,7 +105,7 @@ fn parse_macro_outer(ecx: &mut ExtCtxt, sp: Span, args: &[TokenTree]) -> Box<Mac
         }
     };
 
-    // debug!("Returning: {:?}", expr);
+    debug!("Returning: {:?}", expr);
     MacEager::expr(expr)
 }
 
@@ -170,8 +170,13 @@ fn get_ident(num: usize) -> Ident {
     Ident::from_str(&chars[start..(start + need)])
 }
 
+/// Takes an expression `param`, generates a binding to a unique identifier for
+/// every subexpression in `param`, replaces each subexpression in `param` with
+/// the new unique identifier, generates a unique identifer for this new,
+/// overarching expression, adds every new binding for each new identifier to
+/// `stmts`, and returns the rebound expression.
 fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr> {
-    let mut param_expr = param.clone().unwrap();
+    let mut param_expr = param.clone().into_inner();
     match param_expr.node {
         ExprKind::Call(..) | ExprKind::MethodCall(..) | ExprKind::Mac(..) => {
             let unique_ident = get_ident(stmts.len()); // FIXME: Generate this.
@@ -198,6 +203,16 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
             param_expr.node = ExprKind::AddrOf(mutability, new_expr);
             P(param_expr)
         }
+        ExprKind::Cast(expr, ty) => {
+            let new_expr = remonad_param(ecx, expr, stmts);
+            param_expr.node = ExprKind::Cast(new_expr, ty);
+            P(param_expr)
+        }
+        ExprKind::Index(expr, index) => {
+            let new_expr = remonad_param(ecx, expr, stmts);
+            param_expr.node = ExprKind::Index(new_expr, index);
+            P(param_expr)
+        }
         ExprKind::Path(..) | ExprKind::Lit(..) | ExprKind::Closure(..) => {
             param
         }
@@ -209,14 +224,35 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
     }
 }
 
-fn remonad_params<F>(ecx: &ExtCtxt,
-                     input: &P<Expr>,
-                     binding: &P<Pat>,
-                     expr: &P<Expr>,
-                     params: Vec<P<Expr>>,
-                     expr_is_end_type: bool,
-                     remake: F,
-                     ) -> P<Expr>
+/// Monadifies the set of expressions in `params`.
+///
+///     A set of expressions: [A, B, C]
+///
+///     Is converted into: { let a = A'; let b = B'; let c = C'; }
+///
+/// Each prime is the expression run though `remonad_param`.
+///
+/// The vector of expressions [a, b, c] is passed to `remake` to yield a new
+/// expression, `new_expr`, which is inserted at the end of the converted block:
+///
+///     { let a = A; let b = B; let c = C; new_expr }
+///
+/// This block is passed to `gen_expr` for monadification of each subexpression.
+/// This means that the type of each subexpression remains the same (due to
+/// remonadification) but the type of the returned expression from this function
+/// is `ParseResult`.
+///
+/// If the type of `expr` is already a `ParseResult`, `expr_is_end_type` should
+/// be set to `true` to avoid re-monadifying the resulting expression.
+fn remonad_params<F>(
+    ecx: &ExtCtxt,
+    input: &P<Expr>,
+    binding: &P<Pat>,
+    expr: &P<Expr>,
+    params: Vec<P<Expr>>,
+    expr_is_end_type: bool,
+    remake: F,
+) -> P<Expr>
     where F: FnOnce(Vec<P<Expr>>) -> ExprKind
 {
     debug!("remonadding: {} param", params.len());
@@ -225,8 +261,12 @@ fn remonad_params<F>(ecx: &ExtCtxt,
         .map(|p| remonad_param(ecx, p, &mut stmts))
         .collect();
 
-    let mut new_expr = expr.clone().unwrap();
+    let mut new_expr = expr.clone().into_inner();
     new_expr.node = remake(new_params);
+
+    // `remonad_params` is co-recursive with `gen_expr` and will be called with
+    // `expr` once again, except `expr` will already be monadified. In that
+    // case, `stmts` will be empty. This is the base case.
     if stmts.is_empty() {
         let expr = P(new_expr);
         match expr_is_end_type {
@@ -242,12 +282,19 @@ fn remonad_params<F>(ecx: &ExtCtxt,
     }
 }
 
-fn gen_expr(ecx: &ExtCtxt,
-            input: &P<Expr>,
-            binding: &P<Pat>,
-            expr: &P<Expr>,
-            stmts: VecDeque<Stmt>) -> P<Expr> {
-    let mut unwrapped_expr = expr.clone().unwrap();
+/// Entry point: this gets called with the user's expression `expr` and parse
+/// input expression `input`. Given any `expr`, returns an expression of type
+/// `ParseResult`. If `stmts` is non-empty, an expression or statement is
+/// generated for each statement in `stmts` and the expression generated for
+/// `expr` is bound to `binding`.
+fn gen_expr(
+    ecx: &ExtCtxt,
+    input: &P<Expr>,
+    binding: &P<Pat>,
+    expr: &P<Expr>,
+    stmts: VecDeque<Stmt>
+) -> P<Expr> {
+    let mut unwrapped_expr = expr.clone().into_inner();
     let new_expr = match unwrapped_expr.node {
         ExprKind::Call(fn_name, params) => {
             let whitelisted = is_whitelisted_fn(&fn_name);
@@ -265,6 +312,7 @@ fn gen_expr(ecx: &ExtCtxt,
 
                     ExprKind::Call(fn_name, new_params)
                 };
+
                 remonad_params(ecx, input, binding, expr, params, true, remake)
             }
         }
@@ -330,6 +378,18 @@ fn gen_expr(ecx: &ExtCtxt,
             unwrapped_expr.node = ExprKind::Break(sp_ident, expr);
             P(unwrapped_expr)
         }
+        ExprKind::Ret(expr) => {
+            match expr {
+                None => ecx.span_fatal(unwrapped_expr.span, "return requires expression"),
+                Some(expr) => {
+                    let wild = ecx.pat_wild(DUMMY_SP);
+                    let new_expr = gen_expr(ecx, input, &wild, &expr, VecDeque::new());
+                    unwrapped_expr.node = ExprKind::Ret(Some(new_expr));
+                }
+            }
+
+            P(unwrapped_expr)
+        }
         ExprKind::Continue(..) => {
             P(unwrapped_expr)
         }
@@ -342,7 +402,7 @@ fn gen_expr(ecx: &ExtCtxt,
                 None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
             };
 
-            let new_block = gen_stmt(ecx, input, VecDeque::from(block.unwrap().stmts));
+            let new_block = gen_stmt(ecx, input, VecDeque::from(block.into_inner().stmts));
             quote_expr!(ecx, if $cond_expr { $new_block } else { $new_else })
         }
         ExprKind::IfLet(pat, pat_expr, true_block, else_block) => {
@@ -354,7 +414,7 @@ fn gen_expr(ecx: &ExtCtxt,
                 None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
             };
 
-            let new_block = gen_stmt(ecx, input, VecDeque::from(true_block.unwrap().stmts));
+            let new_block = gen_stmt(ecx, input, VecDeque::from(true_block.into_inner().stmts));
             quote_expr!(ecx, if let $pat = $pat_expr { $new_block } else { $new_else })
         }
         ExprKind::Match(expr, mut arms) => {
@@ -367,6 +427,16 @@ fn gen_expr(ecx: &ExtCtxt,
 
             unwrapped_expr.node = ExprKind::Match(expr, arms);
             P(unwrapped_expr)
+        }
+        ExprKind::Assign(left_expr, right_expr) => {
+            ecx.span_warn(left_expr.span, "this expression is not being lifted");
+
+            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Assign(left_expr, new_expr[0].clone());
+            remonad_params(ecx, input, binding, expr, vec![right_expr], false, remake)
+        }
+        ExprKind::Cast(cexpr, ty) => {
+            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Cast(new_expr[0].clone(), ty);
+            remonad_params(ecx, input, binding, expr, vec![cexpr], false, remake)
         }
         ExprKind::Path(..) | ExprKind::Lit(..) => {
             quote_expr!(ecx, ::pear::ParseResult::Done($expr))
@@ -393,6 +463,9 @@ fn gen_expr(ecx: &ExtCtxt,
     }
 }
 
+/// Generates an expression or statement for all of the statement in `stmt`. If
+/// `stmts` is empty, returns the generated expression (from `gen_expr`) for
+/// `()`. This function is co-recursive with `gen_expr`.
 fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<TokenTree> {
     let wild = ecx.pat_wild(DUMMY_SP);
     let mut stmt = match stmts.pop_front() {
@@ -419,6 +492,7 @@ fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<To
             gen_expr(ecx, input, &wild, expr, stmts).to_tokens(ecx)
         }
         StmtKind::Semi(ref expr) => {
+            // Ensure the type of this is (monadically) a `()`.
             if stmts.is_empty() {
                 stmts.push_front(ecx.stmt_expr(quote_expr!(ecx, ())));
             }
@@ -426,7 +500,7 @@ fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<To
             gen_expr(ecx, input, &wild, expr, stmts).to_tokens(ecx)
         }
         StmtKind::Mac(mac_stmt) => {
-            let mac = mac_stmt.unwrap().0;
+            let mac = mac_stmt.into_inner().0;
             let mac_expr = P(Expr {
                 id: stmt.id,
                 node: ExprKind::Mac(mac),
