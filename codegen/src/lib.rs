@@ -53,11 +53,12 @@ fn get_input_from_decl(ecx: &ExtCtxt, decl: &FnDecl) -> SpannedIdent {
     Spanned { node: Ident::from_str("__dummy"), span: pat.span }
 }
 
-fn parser_decorator(ecx: &mut ExtCtxt,
-                    sp: Span,
-                    attr: &MetaItem,
-                    annotated: Annotatable
-                   ) -> Annotatable {
+fn parser_decorator(
+    ecx: &mut ExtCtxt,
+    sp: Span,
+    attr: &MetaItem,
+    annotated: Annotatable
+) -> Annotatable {
     if attr.is_value_str() || attr.is_meta_item_list() {
         ecx.span_err(sp, "the `parser` attribute does not support any parameters");
     }
@@ -82,14 +83,8 @@ fn parser_decorator(ecx: &mut ExtCtxt,
         }
     }
 
-    let item_span = match annotated {
-        Annotatable::Item(ref item) => item.span,
-        Annotatable::TraitItem(ref item) => item.span,
-        Annotatable::ImplItem(ref item) => item.span
-    };
-
     ecx.struct_span_err(sp, "this attribute can only be applied to functions")
-        .span_note(item_span, "the attribute was applied to this item")
+        .span_note(annotated.span(), "the attribute was applied to this item")
         .emit();
 
     annotated
