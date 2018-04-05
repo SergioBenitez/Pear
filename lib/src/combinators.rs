@@ -142,7 +142,7 @@ macro_rules! try_repeat_while {
                 break;
             }
 
-            if let $crate::ParseResult::Error(e) = parse!($input, { $($inner)* }) {
+            if let $crate::ParseResult::Error(_) = parse!($input, { $($inner)* }) {
                 break;
             }
 
