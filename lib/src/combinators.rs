@@ -135,6 +135,27 @@ macro_rules! try_repeat {
 }
 
 #[macro_export]
+macro_rules! try_repeat_while {
+    ($input:expr, $cond:expr, $($inner:tt)*) => ({
+        loop {
+            if let $crate::ParseResult::Done(_) = eof($input) {
+                break;
+            }
+
+            if let $crate::ParseResult::Error(e) = parse!($input, { $($inner)* }) {
+                break;
+            }
+
+            if let $crate::ParseResult::Error(_) = parse!($input, $cond) {
+                break;
+            }
+        }
+
+        $crate::ParseResult::Done(())
+    });
+}
+
+#[macro_export]
 macro_rules! repeat_while {
     ($input:expr, $cond:expr, $($inner:tt)*) => ({
         #[warn(unused_assignments)]
