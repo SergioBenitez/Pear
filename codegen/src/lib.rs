@@ -24,8 +24,7 @@ use syntax::ext::quote::rt::ToTokens;
 
 use syntax::symbol::Symbol;
 use syntax::ext::base::{SyntaxExtension, Annotatable};
-use syntax::ast::{ItemKind, MetaItem, FnDecl, PatKind, SpannedIdent};
-use syntax::codemap::Spanned;
+use syntax::ast::{ItemKind, MetaItem, FnDecl, PatKind};
 
 macro_rules! debug {
     ($($t:tt)*) => (
@@ -43,14 +42,14 @@ pub fn plugin_registrar(reg: &mut Registry) {
         SyntaxExtension::MultiModifier(Box::new(parser_decorator)));
 }
 
-fn get_input_from_decl(ecx: &ExtCtxt, decl: &FnDecl) -> SpannedIdent {
+fn get_input_from_decl(ecx: &ExtCtxt, decl: &FnDecl) -> Ident {
     let pat = &decl.inputs[0].pat;
     match pat.node {
         PatKind::Ident(_, ident, _) => return ident,
         _ => ecx.span_err(pat.span, "expected an identifier")
     }
 
-    Spanned { node: Ident::from_str("__dummy"), span: pat.span }
+    Ident::new(Symbol::intern("__dummy"), pat.span)
 }
 
 fn parser_decorator(
@@ -128,14 +127,14 @@ fn is_whitelisted_fn(expr: &P<Expr>) -> bool {
         // Check the penultimate segment, if there is one.
         let num_segs = path.segments.len();
         if num_segs > 1 {
-            let penultimate = path.segments[num_segs - 2].identifier.name.as_str();
+            let penultimate = path.segments[num_segs - 2].ident.name.as_str();
             let is_whitelisted = penultimate.starts_with(char::is_uppercase)
                 || FN_PENULTIMATE_WHITELIST.iter().any(|v| &&*penultimate == v);
             if is_whitelisted { return true; }
         }
 
         // Check the last segment.
-        let last = path.segments[num_segs - 1].identifier.name.as_str();
+        let last = path.segments[num_segs - 1].ident.name.as_str();
         last.starts_with(char::is_uppercase)
             || FN_END_WHITELIST.iter().any(|v| &&*last == v)
     } else {
@@ -144,11 +143,11 @@ fn is_whitelisted_fn(expr: &P<Expr>) -> bool {
 }
 
 fn is_whitelisted_macro(path: &Path) -> bool {
-    let first_ident = path.segments[0].identifier.name.as_str();
+    let first_ident = path.segments[0].ident.name.as_str();
     MACRO_WHITELIST.iter().any(|val| &&*first_ident == val)
 }
 
-fn get_ident(num: usize) -> Ident {
+fn get_ident(num: usize, span: Span) -> Ident {
     let chars = "abcdefghijklmnopqrstuvwxyz";
     let available = (chars.len() * (chars.len() + 1)) / 2;
     if num >= available {
@@ -162,7 +161,7 @@ fn get_ident(num: usize) -> Ident {
         need += 1;
     }
 
-    Ident::from_str(&chars[start..(start + need)])
+    Ident::new(Symbol::intern(&chars[start..(start + need)]), span)
 }
 
 /// Takes an expression `param`, generates a binding to a unique identifier for
@@ -174,7 +173,7 @@ fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr
     let mut param_expr = param.clone().into_inner();
     match param_expr.node {
         ExprKind::Call(..) | ExprKind::MethodCall(..) | ExprKind::Mac(..) => {
-            let unique_ident = get_ident(stmts.len()); // FIXME: Generate this.
+            let unique_ident = get_ident(stmts.len(), param.span);
             stmts.push(quote_stmt!(ecx, let $unique_ident = $param;).unwrap());
             ecx.expr_ident(param.span, unique_ident)
         }

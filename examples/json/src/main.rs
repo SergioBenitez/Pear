@@ -1,4 +1,4 @@
-#![feature(plugin, test, inclusive_range_syntax, range_contains)]
+#![feature(plugin, test, range_contains)]
 #![plugin(pear_codegen)]
 
 #[macro_use] extern crate pear;
