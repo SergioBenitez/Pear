@@ -336,9 +336,9 @@ fn gen_expr(
             let remake = |new_exprs| ExprKind::Tup(new_exprs);
             remonad_params(ecx, input, binding, expr, exprs, false, remake)
         }
-        ExprKind::TupField(indexed_expr, i) => {
-            let remake = |new_expr: Vec<P<Expr>>| ExprKind::TupField(new_expr[0].clone(), i);
-            remonad_params(ecx, input, binding, expr, vec![indexed_expr], false, remake)
+        ExprKind::Field(field_expr, id) => {
+            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Field(new_expr[0].clone(), id);
+            remonad_params(ecx, input, binding, expr, vec![field_expr], false, remake)
         }
         ExprKind::Unary(op, uexpr) => {
             let remake = |new_expr: Vec<P<Expr>>| ExprKind::Unary(op, new_expr[0].clone());
