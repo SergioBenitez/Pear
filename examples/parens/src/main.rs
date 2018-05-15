@@ -10,25 +10,22 @@ use pear::{parser, switch};
 
 declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
-// FIXME: Make this possible without the `input`. I think this is a rustc bug,
-// actually.
 macro_rules! pear_try {
-    ($input:expr, $e:expr) => {{
-        let input = &mut *$input;
-        switch! { $e => {  }, _ => {  } }
+    ([$name:ident; $input:expr] $e:expr) => {{
+        switch! { [$name;$input] result@$e => { Some(result) }, _ => { None } }
     }};
-    ($input:expr, $e:expr => $r:expr) => (
-        switch! { $e => { Some($r) }, _ => { None } }
-    );
-    ($input:expr, $pat:ident@$e:expr => $r:expr) => (
-        switch! { $pat@$e => { Some($r) }, _ => { None } }
-    )
+    ([$name:ident; $input:expr] $e:expr => $r:expr) => {{
+        switch! { [$name;$input] $e => { Some($r) }, _ => { None } }
+    }};
+    ([$name:ident; $input:expr] $pat:ident@$e:expr => $r:expr) => {{
+        switch! { [$name;$input] $pat@$e => { Some($r) }, _ => { None } }
+    }}
 }
 
 #[parser]
 fn parens<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
     eat('(')?;
-    pear_try!(input, parens());
+    pear_try!(parens());
     eat(')')?;
 }
 

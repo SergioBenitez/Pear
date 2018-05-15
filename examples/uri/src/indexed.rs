@@ -187,7 +187,7 @@ impl<'a> IndexedInput<'a, [u8]> {
             Ok(())
         } else {
             let diag = format!("({}, {:x} in {:x})", n, current_addr, source_addr);
-            Err(pear_error!("<backtrack>", "internal error: {}", diag))
+            Err(pear_error!([backtrack; self] "internal error: {}", diag))
         }
     }
 

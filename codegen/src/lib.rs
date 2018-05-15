@@ -29,6 +29,7 @@ enum State {
 
 struct ParserTransformer {
     input: Expr,
+    name: Ident,
     state: State,
 }
 
@@ -46,6 +47,20 @@ impl VisitMut for ParserTransformer {
             call.args.insert(0, self.input.clone());
         } else {
             visit_mut::visit_expr_call_mut(self, call);
+        }
+    }
+
+    fn visit_macro_mut(&mut self, m: &mut Macro) {
+        if let Some(ref segment) = m.path.segments.last() {
+            let name = segment.value().ident.as_ref();
+            if name == "switch" || name.starts_with("pear_") {
+                let new_stream = {
+                    let (input, name, tokens) = (&self.input, &self.name, &m.tts);
+                    quote!([#name; #input] #tokens)
+                };
+
+                m.tts = new_stream.into();
+            }
         }
     }
 }
@@ -86,6 +101,7 @@ fn parser_attribute(input: TokenStream) -> PResult<Tokens> {
 
     let mut transformer = ParserTransformer {
         input: input_expr,
+        name: function.ident.clone(),
         state: State::Start
     };
 
@@ -192,6 +208,8 @@ struct Case {
 
 #[derive(Debug)]
 struct Switch {
+    parser_name: Ident,
+    input: Expr,
     cases: Vec<Case>
 }
 
@@ -214,9 +232,16 @@ fn parse_expr_call(parser: &mut Parser) -> parser::Result<ExprCall> {
 }
 
 fn parse_switch(input: TokenStream) -> Result<Switch, Diagnostic> {
-    use parser::{Seperator::*};
+    use parser::{Seperator::*, Delimiter::*};
 
     let mut parser = Parser::new(input);
+    let (parser_name, input) = parser.parse_group(Bracket, |p| {
+        let name = p.parse::<Ident>()?;
+        p.parse::<token::Semi>()?;
+        let input = p.parse::<Expr>()?;
+        Ok((name, input))
+    })?;
+
     let cases: Vec<Case> = parser.parse_sep(Comma, |parser| {
         let case_span_start = parser.current_span();
 
@@ -269,11 +294,11 @@ fn parse_switch(input: TokenStream) -> Result<Switch, Diagnostic> {
 
     }
 
-    Ok(Switch { cases })
+    Ok(Switch { parser_name, input, cases })
 }
 
 impl Case {
-    fn to_tokens(input: &Expr, cases: &[Case]) -> Tokens {
+    fn to_tokens(input: &Expr, parser_name: &Ident, cases: &[Case]) -> Tokens {
         if cases.len() == 0 {
             // FIXME: Should we allow this? What should we do if we get here?
             return quote!(panic!("THIS IS THE CASE WHERE THERE'S NO _"));
@@ -283,6 +308,7 @@ impl Case {
 
         let mut transformer = ParserTransformer {
             input: input.clone(),
+            name: parser_name.clone(),
             state: State::Start
         };
 
@@ -312,7 +338,7 @@ impl Case {
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(&input, rest);
+                let rest_tokens = Case::to_tokens(&input, parser_name, rest);
 
                 quote! {
                     #(
@@ -330,16 +356,7 @@ impl Case {
 
 impl Switch {
     fn to_tokens(&self) -> Tokens {
-        // FIXME: This needs to come from..where!? Idea: We can force the user
-        // to call the input `input`.
-        let input_ident = Ident::from("input");
-        let input_expr = Expr::Path(ExprPath {
-            attrs: vec![],
-            qself: None,
-            path: input_ident.into()
-        });
-
-        Case::to_tokens(&input_expr, &self.cases)
+        Case::to_tokens(&self.input, &self.parser_name, &self.cases)
     }
 }
 

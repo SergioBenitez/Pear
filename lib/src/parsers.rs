@@ -255,7 +255,7 @@ pub fn collection<C: Collection<Item=O>, I: Input, O, F>(
 {
     let mut collection = (eat(input, start)?, C::new()).1;
     loop {
-        switch! {
+        switch! { [collection; input]
             eat(end) => break,
             eat(seperator) => continue,
             _ => collection.push(item()?)

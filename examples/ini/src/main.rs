@@ -81,7 +81,7 @@ fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
 #[parser]
 fn float<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
     take_some_while(is_num_char)?.parse()
-        .map_err(|e| pear_error!("float", "{}", e))
+        .map_err(|e| pear_error!("{}", e))
 }
 
 #[parser]

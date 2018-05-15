@@ -34,7 +34,7 @@ declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 #[parser]
 fn int<'a, I: Input<'a>>(input: &mut I) -> Result<i64, I> {
     take_some_while(is_num)?.parse()
-        .map_err(|e| pear_error!("int", "{}", e))// NOT BENCH
+        .map_err(|e| pear_error!("{}", e))// NOT BENCH
     // take_some_while(|c| ('0'..='9').contains(c)); // BENCH
     // 1 // BENCH
 }
@@ -54,7 +54,7 @@ fn number<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
 
     // NOT BENCH
     format!("{}.{}e{}", whole_num, frac, exp).parse()
-        .map_err(|e| pear_error!("number", "{}", e))
+        .map_err(|e| pear_error!("{}", e))
 
     // 0.0 // BENCH
 }

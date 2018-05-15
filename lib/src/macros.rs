@@ -39,23 +39,23 @@ macro_rules! parse {
     })
 }
 
-// Idea: Have this know about the parser's name when it can.
-#[macro_export]
-macro_rules! parse_error {
-    ($input:expr, $name:expr, $error:expr) => (
-        $crate::ParseErr::new($name, $error)
-    );
-}
-
-// Idea: Have this know about the parser's name when it can.
 #[macro_export]
 macro_rules! pear_error {
-    // ($name:expr, $error:expr) => ($crate::ParseErr::new($name, $error));
-    // ($error:expr) => ($crate::ParseErr::new("<unknown>", $error));
-    // println!("String: {:?}", string);
-    // ($fmt:expr) => { ... };
-    ($name:expr, $err:expr) => (pear_error!($name, $err,));
-    ($name:expr, $fmt:expr, $($arg:tt)*) => {
-        $crate::ParseErr::new($name, format!($fmt, $($arg)*))
+    ([$name:ident; $i:expr] $err:expr) => (pear_error!([$name; $i] $err,));
+    ([$name:ident; $i:expr] $fmt:expr, $($arg:tt)*) => {
+        $crate::ParseErr::new(stringify!($name), format!($fmt, $($arg)*))
     };
+}
+
+#[macro_export]
+macro_rules! pear_try {
+    ([$name:ident; $input:expr] $e:expr) => {{
+        switch! { [$name;$input] result@$e => { Some(result) }, _ => { None } }
+    }};
+    ([$name:ident; $input:expr] $e:expr => $r:expr) => {{
+        switch! { [$name;$input] $e => { Some($r) }, _ => { None } }
+    }};
+    ([$name:ident; $input:expr] $pat:ident@$e:expr => $r:expr) => {{
+        switch! { [$name;$input] $pat@$e => { Some($r) }, _ => { None } }
+    }}
 }
