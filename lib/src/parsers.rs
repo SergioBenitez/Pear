@@ -1,150 +1,267 @@
-use {Input, Length, ParseResult, Expected};
-use result::error;
-use ParseResult::*;
+use {Result, Input, Length, Expected, ParseErr, switch};
+
+// TODO:
+// * provide basic parsers in pear
+//   - [f32, f64, i8, i32, ..., bool, etc.]: one for all reasonable built-ins
+//   - quoted_string(allowed): '"' allowed* '"'
+//   - escaped string, with some way to configure escapes
 
 #[inline(always)]
-fn advance_and<I: Input, T>(input: &mut I, num: usize, out: T) -> ParseResult<I, T> {
+pub fn error<I: Input, R>(input: &mut I, parser: &'static str, expected: Expected<I>) -> Result<R, I> {
+    Err(ParseErr { parser, expected, context: input.context() })
+}
+
+#[inline(always)]
+fn advance_and<I: Input, T>(input: &mut I, num: usize, out: T) -> Result<T, I> {
     input.advance(num);
-    Done(out)
+    Ok(out)
 }
 
 #[inline]
-pub fn eat<I: Input>(input: &mut I, token: I::Token) -> ParseResult<I, I::Token> {
+pub fn eat<I: Input>(input: &mut I, token: I::Token) -> Result<I::Token, I> {
     match input.peek() {
         Some(peeked) if peeked == token => advance_and(input, 1, token),
-        t@Some(_) | t@None => error("eat", Expected::Token(Some(token), t)),
+        t@Some(_) | t@None => error(input, "eat", Expected::Token(Some(token), t)),
     }
 }
 
 #[inline]
-pub fn eat_if<I: Input, F>(input: &mut I, cond: F) -> ParseResult<I, I::Token>
+pub fn eat_if<I: Input, F>(input: &mut I, cond: F) -> Result<I::Token, I>
     where F: Fn(I::Token) -> bool
 {
     match input.peek() {
         Some(peeked) if cond(peeked) => advance_and(input, 1, peeked),
-        t@Some(_) | t@None => error("eat_if", Expected::Token(None, t)),
+        t@Some(_) | t@None => error(input, "eat_if", Expected::Token(None, t)),
     }
 }
 
 #[inline]
-pub fn eat_slice<I: Input>(input: &mut I, slice: I::InSlice) -> ParseResult<I, I::Slice> {
+pub fn eat_slice<I: Input>(input: &mut I, slice: I::InSlice) -> Result<I::Slice, I> {
     let len = slice.len();
     match input.peek_slice(slice.clone()) {
         Some(peeked) => advance_and(input, len, peeked),
-        t@None => error("eat_slice", Expected::Slice(Some(slice), t)),
+        t@None => error(input, "eat_slice", Expected::Slice(Some(slice), t)),
     }
 }
 
 #[inline]
-pub fn eat_any<I: Input>(input: &mut I) -> ParseResult<I, I::Token> {
+pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.peek() {
         Some(peeked) => advance_and(input, 1, peeked),
-        None => error("eat_any", Expected::Token(None, None)),
+        None => error(input, "eat_any", Expected::Token(None, None)),
     }
 }
 
 #[inline]
-pub fn peek<I: Input>(input: &mut I, token: I::Token) -> ParseResult<I, I::Token> {
+pub fn peek<I: Input>(input: &mut I, token: I::Token) -> Result<I::Token, I> {
     match input.peek() {
-        Some(peeked) if peeked == token => Done(token),
-        t@Some(_) | t@None => error("eat", Expected::Token(Some(token), t)),
+        Some(peeked) if peeked == token => Ok(token),
+        t@Some(_) | t@None => error(input, "eat", Expected::Token(Some(token), t)),
     }
 }
 
 #[inline]
-pub fn peek_if<I: Input, F>(input: &mut I, cond: F) -> ParseResult<I, I::Token>
+pub fn peek_if<I: Input, F>(input: &mut I, cond: F) -> Result<I::Token, I>
     where F: Fn(I::Token) -> bool
 {
     match input.peek() {
-        Some(peeked) if cond(peeked) => Done(peeked),
-        t@Some(_) | t@None => error("peek_id", Expected::Token(None, t)),
+        Some(peeked) if cond(peeked) => Ok(peeked),
+        t@Some(_) | t@None => error(input, "peek_id", Expected::Token(None, t)),
     }
 }
 
 #[inline]
-pub fn peek_slice<I: Input>(input: &mut I, slice: I::InSlice) -> ParseResult<I, I::Slice> {
+pub fn peek_slice<I: Input>(input: &mut I, slice: I::InSlice) -> Result<I::Slice, I> {
     match input.peek_slice(slice.clone()) {
-        Some(peeked) => Done(peeked),
-        t@None => error("peek_slice", Expected::Slice(Some(slice), t)),
+        Some(peeked) => Ok(peeked),
+        t@None => error(input, "peek_slice", Expected::Slice(Some(slice), t)),
     }
 }
 
 #[inline]
-pub fn skip_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, ()>
+pub fn skip_while<I: Input, F>(input: &mut I, condition: F) -> Result<(), I>
     where F: FnMut(I::Token) -> bool
 {
     input.skip_many(condition);
-    Done(())
+    Ok(())
 }
 
 #[inline]
-pub fn take_some_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I::Many>
+pub fn take_some_while<I: Input, F>(input: &mut I, condition: F) -> Result<I::Many, I>
     where F: FnMut(I::Token) -> bool
 {
     let value = input.take_many(condition);
     if value.len() == 0 {
-        return error("take_some_while", Expected::Token(None, None));
+        return error(input, "take_some_while", Expected::Token(None, None));
     }
 
-    Done(value)
+    Ok(value)
 }
 
 #[inline(always)]
-pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> ParseResult<I, I::Many>
+pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> Result<I::Many, I>
     where F: FnMut(I::Token) -> bool
 {
-    Done(input.take_many(condition))
+    Ok(input.take_many(condition))
 }
 
 /// Takes at most `num` inputs.
 #[inline(always)]
-pub fn take_n<I: Input>(input: &mut I, num: usize) -> ParseResult<I, I::Many> {
+pub fn take_n<I: Input>(input: &mut I, num: usize) -> Result<I::Many, I> {
     let mut i = 0;
-    Done(input.take_many(|_| { let c = i < num; i += 1; c }))
+    Ok(input.take_many(|_| { let c = i < num; i += 1; c }))
 }
 
 /// Takes at most `num` inputs as long as `condition` holds.
 #[inline(always)]
-pub fn take_n_while<I: Input, F>(input: &mut I, num: usize, mut condition: F) -> ParseResult<I, I::Many>
+pub fn take_n_while<I: Input, F>(input: &mut I, num: usize, mut condition: F) -> Result<I::Many, I>
     where F: FnMut(I::Token) -> bool
 {
     let mut i = 0;
-    Done(input.take_many(|c| { condition(c) && { let ok = i < num; i += 1; ok } }))
+    Ok(input.take_many(|c| { condition(c) && { let ok = i < num; i += 1; ok } }))
+}
+
+/// Take exactly `num` inputs, ensuring `condition` holds.
+#[inline(always)]
+pub fn take_n_if<I: Input, F>(input: &mut I, num: usize, mut condition: F) -> Result<I::Many, I>
+    where F: FnMut(I::Token) -> bool
+{
+    let mut i = 0;
+    let v = input.take_many(|c| { condition(c) && { let ok = i < num; i += 1; ok } });
+    if v.len() != num {
+        return error(input, "take_n", Expected::Token(None, None));
+    }
+
+    Ok(v)
 }
 
 #[inline]
-pub fn delimited<I: Input, F>(input: &mut I,
-                              start: I::Token,
-                              mut cond: F,
-                              end: I::Token) -> ParseResult<I, I::Many>
+pub fn delimited<I: Input, F>(
+    input: &mut I,
+    start: I::Token,
+    mut cond: F,
+    end: I::Token
+) -> Result<I::Many, I>
     where F: FnMut(I::Token) -> bool
 {
-    if let Error(mut e) = eat(input, start) {
+    if let Err(mut e) = eat(input, start) {
         e.parser = "delimited";
-        return Error(e);
+        return Err(e);
     }
 
     let output = match take_some_while(input, |c| c != end && cond(c)) {
-        Done(output) => output,
-        Error(mut e) => {
+        Ok(output) => output,
+        Err(mut e) => {
             e.parser = "delimited";
-            return Error(e);
+            return Err(e);
         }
     };
 
-    if let Error(mut e) = eat(input, end) {
+    if let Err(mut e) = eat(input, end) {
         e.parser = "delimited";
-        return Error(e);
+        return Err(e);
     }
 
-    Done(output)
+    Ok(output)
+}
+
+// Like delimited, but keeps the start and end tokens.
+#[inline]
+pub fn enclosed<I: Input, F>(
+    input: &mut I,
+    start: I::Token,
+    mut cond: F,
+    end: I::Token
+) -> Result<I::Many, I>
+    where F: FnMut(I::Token) -> bool
+{
+    let mut phase = 0;
+    let output = take_some_while(input, |c| {
+        match phase {
+            0 => {
+                phase = 1;
+                c == start
+            }
+            1 => if cond(c) {
+                true
+            } else if c == end {
+                phase = 2;
+                true
+            } else {
+                false
+            }
+            _ => false
+        }
+    });
+
+    match phase {
+        0 => error(input, "enclosed", Expected::Token(Some(start), None)),
+        1 => error(input, "enclosed", Expected::Token(Some(end), None)),
+        _ => output
+    }
 }
 
 #[inline(always)]
-pub fn eof<I: Input>(input: &mut I) -> ParseResult<I, ()> {
+pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
     if input.is_empty() {
-        Done(())
+        Ok(())
     } else {
-        error("eof", Expected::EOF)
+        error(input, "eof", Expected::EOF)
     }
 }
+
+pub trait Collection {
+    type Item;
+    fn new() -> Self;
+    fn push(&mut self, item: Self::Item);
+}
+
+impl<T> Collection for Vec<T> {
+    type Item = T;
+
+    fn new() -> Self {
+        vec![]
+    }
+
+    fn push(&mut self, item: Self::Item) {
+        self.push(item);
+    }
+}
+
+use std::hash::Hash;
+use std::collections::HashMap;
+
+impl<K: Eq + Hash, V> Collection for HashMap<K, V> {
+    type Item = (K, V);
+
+    fn new() -> Self {
+        HashMap::new()
+    }
+
+    fn push(&mut self, item: Self::Item) {
+        let (k, v) = item;
+        self.insert(k, v);
+    }
+}
+
+pub fn collection<C: Collection<Item=O>, I: Input, O, F>(
+    input: &mut I,
+    start: I::Token,
+    mut item: F,
+    seperator: I::Token,
+    end: I::Token,
+) -> Result<C, I>
+    where F: FnMut(&mut I) -> Result<O, I>,
+{
+    let mut collection = (eat(input, start)?, C::new()).1;
+    loop {
+        switch! {
+            eat(end) => break,
+            eat(seperator) => continue,
+            _ => collection.push(item()?)
+        }
+    }
+
+    Ok(collection)
+}
+

@@ -4,3 +4,6 @@ version = "0.0.16"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A pear is a fruit."
 license = "MIT/Apache-2.0"
+
+[dependencies]
+pear_codegen = { path = "../codegen" }

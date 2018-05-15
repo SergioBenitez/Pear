@@ -1,0 +1,27 @@
+
+[package]
+name = "uri-fuzz"
+version = "0.0.1"
+authors = ["Automatically generated"]
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies.uri]
+path = ".."
+
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_uri"
+path = "fuzz_targets/fuzz_uri.rs"
+
+[[bin]]
+name = "fuzz_uri_display"
+path = "fuzz_targets/fuzz_uri_display.rs"

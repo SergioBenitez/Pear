@@ -1,36 +1,44 @@
-#![feature(plugin)]
-#![plugin(pear_codegen)]
+#![feature(proc_macro)]
+#![feature(proc_macro_non_items)]
 
 #[macro_use] extern crate pear;
 extern crate time;
 
-use pear::{ParseResult, Input, Text};
+use pear::Result;
 use pear::parsers::*;
+use pear::{parser, switch};
 
-trait StrLikeInput<'a>: Input<Token=char, Slice=&'a str, Many=&'a str> {  }
-impl<'a, T: Input<Token=char, Slice=&'a str, Many=&'a str> + 'a> StrLikeInput<'a> for T {  }
+declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+
+// FIXME: Make this possible without the `input`. I think this is a rustc bug,
+// actually.
+macro_rules! pear_try {
+    ($input:expr, $e:expr) => {{
+        let input = &mut *$input;
+        switch! { $e => {  }, _ => {  } }
+    }};
+    ($input:expr, $e:expr => $r:expr) => (
+        switch! { $e => { Some($r) }, _ => { None } }
+    );
+    ($input:expr, $pat:ident@$e:expr => $r:expr) => (
+        switch! { $pat@$e => { Some($r) }, _ => { None } }
+    )
+}
 
 #[parser]
-fn parens<'a, I: StrLikeInput<'a>>(input: &mut I, top: bool) -> ParseResult<I, usize> {
-    eat('(');
-    let n = maybe!(parens(false));
-    eat(')');
-
-    if top { eof(); }
-    n.unwrap_or(0) + 1
+fn parens<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
+    eat('(')?;
+    pear_try!(input, parens());
+    eat(')')?;
 }
 
 fn main() {
-    let start = time::precise_time_ns();
-    let mut text = Text::from("(())");
-    let result = parens(&mut text, true);
-    let end = time::precise_time_ns();
+    let result = parse!(parens: &mut ::pear::Text::from("((((()))))"));
+    if let Err(e) = result { println!("Error: {}", e); }
 
-    if let ParseResult::Error(ref e) = result {
-        println!("Error: {}", e);
-        println!("{}", text.context().unwrap());
-    }
+    let result = parse!(parens: &mut ::pear::Text::from("((())))"));
+    if let Err(e) = result { println!("Error: {}", e); }
 
-    // TODO: Make sure we can use the same parser for files and strings.
-    println!("Result (in {}us): {:?}", (end - start) / 1000, result);
+    let result = parse!(parens: &mut ::pear::Text::from("(((()))"));
+    if let Err(e) = result { println!("Error: {}", e); }
 }

@@ -2,7 +2,31 @@ use std::borrow::Cow;
 use std::fmt;
 
 use Input;
-use ParseResult::*;
+
+pub trait AsResult<T, I: Input> {
+    fn as_result(self) -> Result<T, I>;
+}
+
+impl<T, I: Input> AsResult<T, I> for T {
+    fn as_result(self) -> Result<T, I> {
+        Ok(self)
+    }
+}
+
+// // This one will result in inference issues when `Ok(T)` is returned.
+// impl<T, I: Input, E: ::std::fmt::Display> AsResult<T, I> for ::std::result::Result<T, E> {
+//     fn as_result(self) -> Result<T, I> {
+//         let name = unsafe { ::std::intrinsics::type_name::<E>() };
+//         self.map_err(|e| ParseErr::new(name, e.to_string()))
+//     }
+// }
+
+// This one won't but makes some things uglier to write.
+impl<T, I: Input> AsResult<T, I> for Result<T, I> {
+    fn as_result(self) -> Result<T, I> {
+        self
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<I: Input> {
@@ -50,84 +74,35 @@ impl<I: Input> fmt::Display for Expected<I> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParseError<I: Input> {
+pub struct ParseErr<I: Input> {
     pub parser: &'static str,
-    pub expected: Expected<I>
+    pub expected: Expected<I>,
+    pub context: Option<I::Context>,
 }
 
-impl<I: Input> ParseError<I> {
+impl<I: Input> ParseErr<I> {
     #[inline(always)]
-    pub fn custom<T, R>(parser: &'static str, message: T) -> ParseResult<I, R>
+    pub fn new<T>(parser: &'static str, message: T) -> ParseErr<I>
         where T: Into<Cow<'static, str>>
     {
-        ParseResult::Error(ParseError {
-            parser: parser,
-            expected: Expected::Custom(message.into())
-        })
+        ParseErr {
+            parser,
+            expected: Expected::Custom(message.into()),
+            context: None
+        }
     }
 }
 
-impl<I: Input> fmt::Display for ParseError<I> {
+impl<I: Input> fmt::Display for ParseErr<I> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "'{}': {}", self.parser, self.expected)
-    }
-}
-
-#[derive(Debug)]
-pub enum ParseResult<I: Input, R> {
-    Done(R),
-    Error(ParseError<I>)
-}
-
-impl<I: Input, R> ParseResult<I, R> {
-    #[inline(always)]
-    pub fn unwrap(self) -> R {
-        match self {
-            Done(result) => result,
-            Error(e) => panic!("Unwrap on ParseResult::Err: {}", e)
+        write!(f, "'{}': {}", self.parser, self.expected)?;
+        if let Some(ref context) = self.context {
+            write!(f, " ({})", context)?;
         }
-    }
 
-    #[inline(always)]
-    pub fn map<U, F: FnOnce(R) -> U>(self, f: F) -> Result<U, ParseError<I>> {
-        match self {
-            Done(result) => Ok(f(result)),
-            Error(e) => Err(e)
-        }
-    }
-
-    #[inline(always)]
-    pub fn ok(self) -> Option<R> {
-        match self {
-            Done(result) => Some(result),
-            Error(_) => None
-        }
+        Ok(())
     }
 }
 
-impl<I: Input, T, E: fmt::Display> From<Result<T, E>> for ParseResult<I, T> {
-    #[inline]
-    fn from(result: Result<T, E>) -> ParseResult<I, T> {
-        match result {
-            Ok(val) => ParseResult::Done(val),
-            Err(e) => ParseResult::Error(ParseError {
-                parser: "std::Result",
-                expected: Expected::Custom(Cow::Owned(e.to_string()))
-            })
-        }
-    }
-}
-
-impl<I: Input, R> Into<Result<R, ParseError<I>>> for ParseResult<I, R> {
-    #[inline(always)]
-    fn into(self) -> Result<R, ParseError<I>> {
-        self.map(|r| r)
-    }
-}
-
-#[inline(always)]
-pub fn error<I: Input, R>(parser: &'static str, expected: Expected<I>) -> ParseResult<I, R> {
-    Error(ParseError { parser: parser, expected: expected })
-}
-
+pub type Result<R, I> = ::std::result::Result<R, ParseErr<I>>;

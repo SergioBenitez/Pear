@@ -1,509 +1,355 @@
-#![feature(plugin_registrar, rustc_private, quote)]
+#![feature(proc_macro)]
+#![feature(core_intrinsics)]
+#![feature(proc_macro_non_items)]
+#![recursion_limit="256"]
 
-extern crate rustc;
-extern crate rustc_errors;
-extern crate rustc_plugin;
-extern crate syntax;
+extern crate proc_macro;
+extern crate proc_macro2;
+extern crate syn;
+#[macro_use] extern crate quote;
 
-use std::collections::VecDeque;
+mod parser;
+mod spanned;
 
-use rustc_plugin::Registry;
+use parser::Parser;
+use spanned::Spanned;
 
-use syntax::ptr::P;
-use syntax::ast::{Expr, ExprKind, Pat, Stmt, StmtKind, Ident, Path};
-// use syntax::tokenstream::TokenTree;
-use syntax::tokenstream::{TokenTree, TokenStream, ThinTokenStream};
-use syntax::parse::PResult;
-use syntax::parse::token::Token;
-use syntax::parse::parser::Parser;
-use syntax::codemap::{Span, DUMMY_SP};
-use syntax::ext::base::{DummyResult, ExtCtxt, MacResult, MacEager};
+use proc_macro::{TokenStream, Span, Diagnostic};
+use quote::Tokens;
+use syn::visit_mut::{self, VisitMut};
+use syn::*;
 
-use syntax::ext::build::AstBuilder;
-use syntax::ext::quote::rt::ToTokens;
+type PResult<T> = Result<T, Diagnostic>;
 
-use syntax::symbol::Symbol;
-use syntax::ext::base::{SyntaxExtension, Annotatable};
-use syntax::ast::{ItemKind, MetaItem, FnDecl, PatKind};
+#[derive(Copy, Clone)]
+enum State {
+    Start,
+    InTry
+}
 
-macro_rules! debug {
-    ($($t:tt)*) => (
-        if ::std::env::var_os("PEAR_CODEGEN_DEBUG").is_some() {
-            println!($($t)*);
+struct ParserTransformer {
+    input: Expr,
+    state: State,
+}
+
+impl VisitMut for ParserTransformer {
+    fn visit_expr_try_mut(&mut self, v: &mut ExprTry) {
+        let last_state = self.state;
+        self.state = State::InTry;
+        visit_mut::visit_expr_try_mut(self, v);
+        self.state = last_state;
+    }
+
+    fn visit_expr_call_mut(&mut self, call: &mut ExprCall) {
+        if let State::InTry = self.state {
+            // TODO: Should we keep recursing?
+            call.args.insert(0, self.input.clone());
+        } else {
+            visit_mut::visit_expr_call_mut(self, call);
         }
-    )
-}
-
-/// Compiler hook for Rust to register plugins.
-#[plugin_registrar]
-pub fn plugin_registrar(reg: &mut Registry) {
-    reg.register_macro("parse", parse_macro_outer);
-    reg.register_syntax_extension(Symbol::intern("parser"),
-        SyntaxExtension::MultiModifier(Box::new(parser_decorator)));
-}
-
-fn get_input_from_decl(ecx: &ExtCtxt, decl: &FnDecl) -> Ident {
-    let pat = &decl.inputs[0].pat;
-    match pat.node {
-        PatKind::Ident(_, ident, _) => return ident,
-        _ => ecx.span_err(pat.span, "expected an identifier")
     }
-
-    Ident::new(Symbol::intern("__dummy"), pat.span)
 }
 
-fn parser_decorator(
-    ecx: &mut ExtCtxt,
-    sp: Span,
-    attr: &MetaItem,
-    annotated: Annotatable
-) -> Annotatable {
-    if attr.is_value_str() || attr.is_meta_item_list() {
-        ecx.span_err(sp, "the `parser` attribute does not support any parameters");
+fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
+    let first = f.decl.inputs.first().ok_or_else(|| {
+        let paren_span = f.decl.paren_token.0.unstable();
+        paren_span.error("parsing functions require at least one input")
+    })?;
+
+    match first.value() {
+        FnArg::Captured(ArgCaptured { pat: Pat::Ident(pat), .. }) => Ok(pat.ident),
+        _ => Err(first.span().error("invalid type for parser input"))
     }
+}
 
-    if let Annotatable::Item(ref item) = annotated {
-        if let ItemKind::Fn(ref decl, safety, cness, abi, ref generics, ref block) = item.node {
-            let input = get_input_from_decl(ecx, decl);
-            let new_inner_fn = quote_expr!(ecx, parse!($input, $block));
-            let new_block = ecx.block_expr(new_inner_fn);
-            let node = ItemKind::Fn(decl.clone(), safety, cness, abi, generics.clone(), new_block);
+// fn ty_from(ret_ty: &ReturnType) -> Box<Type> {
+//     match *ret_ty {
+//         ReturnType::Type(_, ref ty) => ty.clone(),
+//         _ => Box::new(syn::parse2(quote!(()).into()).unwrap())
+//     }
+// }
 
-            let mut new_item = item.clone().into_inner();
-            new_item.node = node;
+// FIXME: Add the now missing `inline` optimization.
+fn parser_attribute(input: TokenStream) -> PResult<Tokens> {
+    let input: proc_macro2::TokenStream = input.into();
+    let span = input.span();
+    let mut function: ItemFn = syn::parse2(input).map_err(|_| {
+        span.error("`parser` attribute only supports functions")
+    })?;
 
-            if block.stmts.len() > 6 {
-                new_item.attrs.push(quote_attr!(ecx, #[inline]));
-            } else {
-                new_item.attrs.push(quote_attr!(ecx, #[inline(always)]));
+    let input_ident = extract_input_ident(&function)?;
+    let input_expr = Expr::Path(ExprPath {
+        attrs: vec![],
+        qself: None,
+        path: input_ident.into()
+    });
+
+    let mut transformer = ParserTransformer {
+        input: input_expr,
+        state: State::Start
+    };
+
+    visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
+
+    let new_block_tokens = {
+        let fn_block = &function.block;
+        let name = &function.ident;
+        let name_str: &str = name.as_ref();
+        quote!({
+            #[allow(unused_imports)]
+            use ::pear::{Input, Length};
+
+            if ::pear::is_debug!() {
+                let ctxt = #input_ident.context().map(|c| c.to_string());
+                ::pear::parser_entry(#name_str, ctxt);
             }
 
-            return Annotatable::Item(P(new_item))
-        }
-    }
+            let result = (|| ::pear::AsResult::as_result(#fn_block))();
 
-    ecx.struct_span_err(sp, "this attribute can only be applied to functions")
-        .span_note(annotated.span(), "the attribute was applied to this item")
-        .emit();
+            if ::pear::is_debug!() {
+                let success = result.is_ok();
+                let ctxt = #input_ident.context().map(|c| c.to_string());
+                ::pear::parser_exit(#name_str, success, ctxt);
+            }
 
-    annotated
+            result
+        })
+    };
+
+    let new_block = syn::parse(new_block_tokens.into()).unwrap();
+    function.block = Box::new(new_block);
+
+    Ok(quote!(#function))
 }
 
-fn parse_macro_outer(ecx: &mut ExtCtxt, sp: Span, args: &[TokenTree]) -> Box<MacResult + 'static> {
-    let parser = ecx.new_parser_from_tts(args);
-    let expr = match parse_macro(parser, ecx, sp) {
-        Ok(expr) => expr,
-        Err(mut diag) => {
+#[proc_macro_attribute]
+pub fn parser(_args: TokenStream, input: TokenStream) -> TokenStream {
+    match parser_attribute(input) {
+        Ok(tokens) => tokens.into(),
+        Err(diag) => {
             diag.emit();
-            return DummyResult::expr(sp);
+            TokenStream::empty()
         }
-    };
-
-    debug!("Returning: {:?}", expr);
-    MacEager::expr(expr)
-}
-
-fn parse_macro<'a>(mut parser: Parser<'a>, ecx: &mut ExtCtxt<'a>, _: Span) -> PResult<'a, P<Expr>> {
-    let input_expr = parser.parse_expr()?;
-    parser.expect(&Token::Comma)?;
-    let output_expr = parser.parse_expr()?;
-    parser.expect(&Token::Eof)?;
-
-    let wild = ecx.pat_wild(DUMMY_SP);
-    Ok(gen_expr(ecx, &input_expr, &wild, &output_expr, VecDeque::new()))
-}
-
-static FN_PENULTIMATE_WHITELIST: &'static [&'static str] = &["str"];
-static FN_END_WHITELIST: &'static [&'static str] = &["drop", "from_utf8"];
-
-static MACRO_WHITELIST: &'static [&'static str] = &[
-    "println", "format", "panic", "print",  "vec", "write", "writeln",
-    "unimplemented", "unreachable", "assert", "assert_eq", "assert_ne",
-    "debug_assert", "debug_assert_eq", "debug_assert_ne"
-];
-
-fn is_whitelisted_fn(expr: &P<Expr>) -> bool {
-    if let ExprKind::Path(_, ref path) = expr.node {
-        // Check the penultimate segment, if there is one.
-        let num_segs = path.segments.len();
-        if num_segs > 1 {
-            let penultimate = path.segments[num_segs - 2].ident.name.as_str();
-            let is_whitelisted = penultimate.starts_with(char::is_uppercase)
-                || FN_PENULTIMATE_WHITELIST.iter().any(|v| &&*penultimate == v);
-            if is_whitelisted { return true; }
-        }
-
-        // Check the last segment.
-        let last = path.segments[num_segs - 1].ident.name.as_str();
-        last.starts_with(char::is_uppercase)
-            || FN_END_WHITELIST.iter().any(|v| &&*last == v)
-    } else {
-        false
     }
 }
 
-fn is_whitelisted_macro(path: &Path) -> bool {
-    let first_ident = path.segments[0].ident.name.as_str();
-    MACRO_WHITELIST.iter().any(|val| &&*first_ident == val)
+#[derive(Debug)]
+struct CallPattern {
+    name: Option<Ident>,
+    expr: ExprCall,
+    span: Span,
 }
 
-fn get_ident(num: usize, span: Span) -> Ident {
-    let chars = "abcdefghijklmnopqrstuvwxyz";
-    let available = (chars.len() * (chars.len() + 1)) / 2;
-    if num >= available {
-        panic!("An expression contained more than {} subexpressions! \
-               Please report this error.", available)
-    }
-
-    let (mut need, mut start) = (1, num);
-    while (start + need) > chars.len() {
-        start -= 26 - (need - 1);
-        need += 1;
-    }
-
-    Ident::new(Symbol::intern(&chars[start..(start + need)]), span)
+#[derive(Debug)]
+enum PatternKind {
+    Wild,
+    Calls(Vec<CallPattern>)
 }
 
-/// Takes an expression `param`, generates a binding to a unique identifier for
-/// every subexpression in `param`, replaces each subexpression in `param` with
-/// the new unique identifier, generates a unique identifer for this new,
-/// overarching expression, adds every new binding for each new identifier to
-/// `stmts`, and returns the rebound expression.
-fn remonad_param(ecx: &ExtCtxt, param: P<Expr>, stmts: &mut Vec<Stmt>) -> P<Expr> {
-    let mut param_expr = param.clone().into_inner();
-    match param_expr.node {
-        ExprKind::Call(..) | ExprKind::MethodCall(..) | ExprKind::Mac(..) => {
-            let unique_ident = get_ident(stmts.len(), param.span);
-            stmts.push(quote_stmt!(ecx, let $unique_ident = $param;).unwrap());
-            ecx.expr_ident(param.span, unique_ident)
-        }
-        ExprKind::Binary(op, left_expr, right_expr) => {
-            let new_left_expr = remonad_param(ecx, left_expr, stmts);
-            let new_right_expr = remonad_param(ecx, right_expr, stmts);
-            param_expr.node = ExprKind::Binary(op, new_left_expr, new_right_expr);
-            P(param_expr)
-        }
-        ExprKind::Tup(exprs) => {
-            let mut new_exprs = Vec::new();
-            for expr in exprs {
-                new_exprs.push(remonad_param(ecx, expr, stmts));
+#[derive(Debug)]
+struct Pattern {
+    kind: PatternKind,
+    span: Span,
+}
+
+impl Pattern {
+    fn validate(&self) -> parser::Result<()> {
+        let mut prev = None;
+        if let PatternKind::Calls(ref calls) = self.kind {
+            for call in calls.iter() {
+                if prev.is_none() { prev = Some(call.name); }
+
+                let prev_name = prev.as_ref().unwrap();
+                if prev_name != &call.name {
+                    let mut err = if let Some(ident) = call.name {
+                        ident.span().unstable()
+                            .error("captured name differs from declaration")
+                    } else {
+                        call.expr.span()
+                            .error("expected capture name due to previous declaration")
+                    };
+
+                    err = match prev_name {
+                        Some(p) => err.span_note(p.span().unstable(), "declared here"),
+                        None => err
+                    };
+
+                    return Err(err);
+                }
             }
+        }
 
-            param_expr.node = ExprKind::Tup(new_exprs);
-            P(param_expr)
-        }
-        ExprKind::AddrOf(mutability, expr) => {
-            let new_expr = remonad_param(ecx, expr, stmts);
-            param_expr.node = ExprKind::AddrOf(mutability, new_expr);
-            P(param_expr)
-        }
-        ExprKind::Cast(expr, ty) => {
-            let new_expr = remonad_param(ecx, expr, stmts);
-            param_expr.node = ExprKind::Cast(new_expr, ty);
-            P(param_expr)
-        }
-        ExprKind::Index(expr, index) => {
-            let new_expr = remonad_param(ecx, expr, stmts);
-            param_expr.node = ExprKind::Index(new_expr, index);
-            P(param_expr)
-        }
-        ExprKind::Path(..) | ExprKind::Lit(..) | ExprKind::Closure(..) => {
-            param
-        }
-        _ => {
-            debug!("not lifting: {:?}", param.node);
-            ecx.span_warn(param.span, "remonad: this expression is not being lifted");
-            param
-        }
+        Ok(())
     }
 }
 
-/// Monadifies the set of expressions in `params`.
-///
-///     A set of expressions: [A, B, C]
-///
-///     Is converted into: { let a = A'; let b = B'; let c = C'; }
-///
-/// Each prime is the expression run though `remonad_param`.
-///
-/// The vector of expressions [a, b, c] is passed to `remake` to yield a new
-/// expression, `new_expr`, which is inserted at the end of the converted block:
-///
-///     { let a = A; let b = B; let c = C; new_expr }
-///
-/// This block is passed to `gen_expr` for monadification of each subexpression.
-/// This means that the type of each subexpression remains the same (due to
-/// remonadification) but the type of the returned expression from this function
-/// is `ParseResult`.
-///
-/// If the type of `expr` is already a `ParseResult`, `expr_is_end_type` should
-/// be set to `true` to avoid re-monadifying the resulting expression.
-fn remonad_params<F>(
-    ecx: &ExtCtxt,
-    input: &P<Expr>,
-    binding: &P<Pat>,
-    expr: &P<Expr>,
-    params: Vec<P<Expr>>,
-    expr_is_end_type: bool,
-    remake: F,
-) -> P<Expr>
-    where F: FnOnce(Vec<P<Expr>>) -> ExprKind
-{
-    debug!("remonadding: {} param", params.len());
-    let mut stmts = vec![];
-    let new_params: Vec<_> = params.into_iter()
-        .map(|p| remonad_param(ecx, p, &mut stmts))
-        .collect();
-
-    let mut new_expr = expr.clone().into_inner();
-    new_expr.node = remake(new_params);
-
-    // `remonad_params` is co-recursive with `gen_expr` and will be called with
-    // `expr` once again, except `expr` will already be monadified. In that
-    // case, `stmts` will be empty. This is the base case.
-    if stmts.is_empty() {
-        let expr = P(new_expr);
-        match expr_is_end_type {
-            true => expr,
-            false => quote_expr!(ecx, ::pear::ParseResult::Done($expr))
-        }
-    } else {
-        debug!("new expr: {:?}", new_expr);
-        debug!("statements: {:?}", stmts);
-        stmts.push(ecx.stmt_expr(P(new_expr)));
-        let block = ecx.expr_block(ecx.block(expr.span, stmts));
-        gen_expr(ecx, input, binding, &block, VecDeque::new())
-    }
+#[derive(Debug)]
+struct Case {
+    pattern: Pattern,
+    expr: Expr,
+    span: Span,
 }
 
-/// Entry point: this gets called with the user's expression `expr` and parse
-/// input expression `input`. Given any `expr`, returns an expression of type
-/// `ParseResult`. If `stmts` is non-empty, an expression or statement is
-/// generated for each statement in `stmts` and the expression generated for
-/// `expr` is bound to `binding`.
-fn gen_expr(
-    ecx: &ExtCtxt,
-    input: &P<Expr>,
-    binding: &P<Pat>,
-    expr: &P<Expr>,
-    stmts: VecDeque<Stmt>
-) -> P<Expr> {
-    let mut unwrapped_expr = expr.clone().into_inner();
-    let new_expr = match unwrapped_expr.node {
-        ExprKind::Call(fn_name, params) => {
-            let whitelisted = is_whitelisted_fn(&fn_name);
-            if whitelisted {
-                debug!("in a whitelisted call");
-                let remake = |new_params| ExprKind::Call(fn_name, new_params);
-                remonad_params(ecx, input, binding, expr, params, false, remake)
-            } else {
-                debug!("not whitelisted! inserted input for: {:?}", fn_name);
-                let remake = |mut new_params: Vec<P<Expr>>| {
-                    // Ensure we don't insert the input twice.
-                    if new_params.is_empty() || &new_params[0] != input {
-                        new_params.insert(0, input.clone());
+#[derive(Debug)]
+struct Switch {
+    cases: Vec<Case>
+}
+
+fn parse_expr_call(parser: &mut Parser) -> parser::Result<ExprCall> {
+    use parser::Delimiter::*;
+    use syn::{punctuated::Punctuated, token::{Comma, Paren}};
+
+    let path: ExprPath = parser.parse()?;
+    let paren_span = parser.current_span();
+    let args = parser.parse_group(Parenthesis, |p| {
+        p.parse_synom("call params", <Punctuated<Expr, Comma>>::parse_terminated)
+    })?;
+
+    Ok(ExprCall {
+        attrs: vec![],
+        func: Box::new(Expr::Path(path)),
+        paren_token: Paren(paren_span.into()),
+        args: args
+    })
+}
+
+fn parse_switch(input: TokenStream) -> Result<Switch, Diagnostic> {
+    use parser::{Seperator::*};
+
+    let mut parser = Parser::new(input);
+    let cases: Vec<Case> = parser.parse_sep(Comma, |parser| {
+        let case_span_start = parser.current_span();
+
+        let pattern = if parser.eat::<PatWild>() {
+            Pattern {
+                kind: PatternKind::Wild,
+                span: case_span_start
+            }
+        } else {
+            let call_patterns = parser.parse_sep(Pipe, |parser| {
+                let start_span = parser.current_span();
+                let name = parser.try_parse(|p| {
+                    let ident = p.parse::<Ident>()?;
+                    p.parse::<token::At>()?;
+                    Ok(ident)
+                }).ok();
+
+                let expr = parse_expr_call(parser)?;
+                let span = start_span.join(parser.current_span()).unwrap();
+                Ok(CallPattern { name, expr, span })
+            })?;
+
+            Pattern {
+                kind: PatternKind::Calls(call_patterns),
+                span: case_span_start.join(parser.current_span()).unwrap()
+            }
+        };
+
+        pattern.validate()?;
+        parser.parse::<token::FatArrow>()?;
+        let expr: Expr = parser.parse()?;
+        let span = case_span_start.join(parser.current_span()).unwrap();
+
+        Ok(Case { pattern, expr, span })
+    })?;
+
+    if !parser.is_eof() {
+        parser.current_span()
+            .error("trailing characters; expected eof")
+            .help("perhaps a comma `,` is missing?")
+            .emit();
+    }
+
+    for (i, case) in cases.iter().enumerate() {
+        if let PatternKind::Wild = case.pattern.kind {
+            if i != cases.len() - 1 {
+                return Err(case.span.error("`_` matches can only appear as the last case"));
+            }
+        }
+
+    }
+
+    Ok(Switch { cases })
+}
+
+impl Case {
+    fn to_tokens(input: &Expr, cases: &[Case]) -> Tokens {
+        if cases.len() == 0 {
+            // FIXME: Should we allow this? What should we do if we get here?
+            return quote!(panic!("THIS IS THE CASE WHERE THERE'S NO _"));
+        }
+
+        let (this, rest) = (&cases[0], &cases[1..]);
+
+        let mut transformer = ParserTransformer {
+            input: input.clone(),
+            state: State::Start
+        };
+
+        let mut case_expr = this.expr.clone();
+        visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
+
+        match this.pattern.kind {
+            PatternKind::Wild => quote!(#case_expr),
+            PatternKind::Calls(ref calls) => {
+                let prefix = (0..calls.len()).into_iter().map(|i| {
+                    match i {
+                        0 => quote!(if),
+                        _ => quote!(else if)
                     }
+                });
 
-                    ExprKind::Call(fn_name, new_params)
-                };
+                let name = calls.iter().map(|call| {
+                    call.name.unwrap_or(Ident::from("_"))
+                });
 
-                remonad_params(ecx, input, binding, expr, params, true, remake)
-            }
-        }
-        ExprKind::MethodCall(ty, params) => {
-            let remake = |new_params| ExprKind::MethodCall(ty, new_params);
-            remonad_params(ecx, input, binding, expr, params, false, remake)
-        }
-        ExprKind::Block(block) => {
-            let stmt = gen_stmt(ecx, input, VecDeque::from(block.stmts.clone()));
-            quote_expr!(ecx, { $stmt })
-        }
-        ExprKind::Mac(mut mac) => {
-            if is_whitelisted_macro(&mac.node.path) {
-                quote_expr!(ecx, ::pear::ParseResult::Done($expr))
-            } else {
-                let mut streams: Vec<_> = quote_tokens!(ecx, $input,).into_iter()
-                    .map(|tt| TokenStream::from(tt))
-                    .collect();
+                // FIXME: We're repeating ourselves, aren't we? We alrady do
+                // this in the visitor.
+                let call_expr = calls.iter().map(|call| {
+                    let mut call = call.expr.clone();
+                    call.args.insert(0, input.clone());
+                    call
+                });
 
-                streams.push(mac.node.stream());
-                mac.node.tts = ThinTokenStream::from(TokenStream::concat(streams));
-                unwrapped_expr.node = ExprKind::Mac(mac);
-                P(unwrapped_expr)
-            }
-        }
-        ExprKind::Tup(exprs) => {
-            let remake = |new_exprs| ExprKind::Tup(new_exprs);
-            remonad_params(ecx, input, binding, expr, exprs, false, remake)
-        }
-        ExprKind::Field(field_expr, id) => {
-            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Field(new_expr[0].clone(), id);
-            remonad_params(ecx, input, binding, expr, vec![field_expr], false, remake)
-        }
-        ExprKind::Unary(op, uexpr) => {
-            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Unary(op, new_expr[0].clone());
-            remonad_params(ecx, input, binding, expr, vec![uexpr], false, remake)
-        }
-        ExprKind::Struct(path, fields, base) => {
-            if let Some(ref base) = base {
-                ecx.span_warn(base.span, "this expression is not being lifted");
-            }
+                let case_expr = ::std::iter::repeat(&case_expr);
+                let rest_tokens = Case::to_tokens(&input, rest);
 
-            let exprs: Vec<P<Expr>> = fields.iter()
-                .map(|field| field.expr.clone())
-                .collect();
-
-            remonad_params(ecx, input, binding, expr, exprs, false, |new_exprs| {
-                let new_fields = fields.into_iter()
-                    .enumerate()
-                    .map(|(i, mut field)| {
-                        field.expr = new_exprs[i].clone();
-                        field
-                    }).collect();
-
-                ExprKind::Struct(path, new_fields, base)
-            })
-        }
-        ExprKind::Break(sp_ident, expr) => {
-            if expr.is_some() {
-                ecx.span_fatal(unwrapped_expr.span, "unsupported expression");
-            }
-
-            unwrapped_expr.node = ExprKind::Break(sp_ident, expr);
-            P(unwrapped_expr)
-        }
-        ExprKind::Ret(expr) => {
-            match expr {
-                None => ecx.span_fatal(unwrapped_expr.span, "return requires expression"),
-                Some(expr) => {
-                    let wild = ecx.pat_wild(DUMMY_SP);
-                    let new_expr = gen_expr(ecx, input, &wild, &expr, VecDeque::new());
-                    unwrapped_expr.node = ExprKind::Ret(Some(new_expr));
+                quote! {
+                    #(
+                        #prefix let Ok(#name) = #call_expr {
+                            #case_expr
+                        }
+                     )* else {
+                        #rest_tokens
+                    }
                 }
             }
-
-            P(unwrapped_expr)
         }
-        ExprKind::Continue(..) => {
-            P(unwrapped_expr)
-        }
-        ExprKind::If(cond_expr, block, else_block) => {
-            ecx.span_warn(cond_expr.span, "this expression is not being lifted");
-
-            let wild = ecx.pat_wild(DUMMY_SP);
-            let new_else = match else_block {
-                Some(ref block) => gen_expr(ecx, input, &wild, block, VecDeque::new()),
-                None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
-            };
-
-            let new_block = gen_stmt(ecx, input, VecDeque::from(block.into_inner().stmts));
-            quote_expr!(ecx, if $cond_expr { $new_block } else { $new_else })
-        }
-        ExprKind::IfLet(pat, pat_expr, true_block, else_block) => {
-            ecx.span_warn(pat_expr.span, "this expression is not being lifted");
-
-            let wild = ecx.pat_wild(DUMMY_SP);
-            let new_else = match else_block {
-                Some(ref block) => gen_expr(ecx, input, &wild, block, VecDeque::new()),
-                None => gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), VecDeque::new())
-            };
-
-            let new_block = gen_stmt(ecx, input, VecDeque::from(true_block.into_inner().stmts));
-            quote_expr!(ecx, if let $pat = $pat_expr { $new_block } else { $new_else })
-        }
-        ExprKind::Match(expr, mut arms) => {
-            ecx.span_warn(expr.span, "this expression is not being lifted");
-
-            let wild = ecx.pat_wild(DUMMY_SP);
-            for arm in &mut arms {
-                arm.body = gen_expr(ecx, input, &wild, &arm.body, VecDeque::new());
-            }
-
-            unwrapped_expr.node = ExprKind::Match(expr, arms);
-            P(unwrapped_expr)
-        }
-        ExprKind::Assign(left_expr, right_expr) => {
-            ecx.span_warn(left_expr.span, "this expression is not being lifted");
-
-            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Assign(left_expr, new_expr[0].clone());
-            remonad_params(ecx, input, binding, expr, vec![right_expr], false, remake)
-        }
-        ExprKind::Cast(cexpr, ty) => {
-            let remake = |new_expr: Vec<P<Expr>>| ExprKind::Cast(new_expr[0].clone(), ty);
-            remonad_params(ecx, input, binding, expr, vec![cexpr], false, remake)
-        }
-        ExprKind::Path(..) | ExprKind::Lit(..) => {
-            quote_expr!(ecx, ::pear::ParseResult::Done($expr))
-        }
-        _ => {
-            debug!("Not lifting: {:?}", expr.node);
-            ecx.span_warn(expr.span, "this expression is being lifted blindly");
-            quote_expr!(ecx, ::pear::ParseResult::Done($expr))
-        }
-    };
-
-    if stmts.is_empty() {
-        new_expr
-    } else {
-        let rest = gen_stmt(ecx, input, stmts);
-        quote_expr!(ecx,
-            match $new_expr {
-                ::pear::ParseResult::Done($binding) => {
-                    $rest
-                }
-                ::pear::ParseResult::Error(e) => ::pear::ParseResult::Error(e)
-            }
-        )
     }
 }
 
-/// Generates an expression or statement for all of the statement in `stmt`. If
-/// `stmts` is empty, returns the generated expression (from `gen_expr`) for
-/// `()`. This function is co-recursive with `gen_expr`.
-fn gen_stmt(ecx: &ExtCtxt, input: &P<Expr>, mut stmts: VecDeque<Stmt>) -> Vec<TokenTree> {
-    let wild = ecx.pat_wild(DUMMY_SP);
-    let mut stmt = match stmts.pop_front() {
-        Some(stmt) => stmt,
-        None => {
-            debug!("Hitting degenerate case.");
-            let expr = gen_expr(ecx, input, &wild, &quote_expr!(ecx, ()), stmts);
-            return expr.to_tokens(ecx);
-        }
-    };
+impl Switch {
+    fn to_tokens(&self) -> Tokens {
+        // FIXME: This needs to come from..where!? Idea: We can force the user
+        // to call the input `input`.
+        let input_ident = Ident::from("input");
+        let input_expr = Expr::Path(ExprPath {
+            attrs: vec![],
+            qself: None,
+            path: input_ident.into()
+        });
 
-    match stmt.node {
-        StmtKind::Local(local) => {
-            if local.init.is_some() {
-                let expr = local.init.as_ref().unwrap();
-                gen_expr(ecx, input, &local.pat, expr, stmts).to_tokens(ecx)
-            } else {
-                stmt.node = StmtKind::Local(local);
-                stmt.to_tokens(ecx)
-            }
-        }
-        StmtKind::Expr(ref expr) => {
-            debug!("Parsing regular expr: {:?}", expr);
-            gen_expr(ecx, input, &wild, expr, stmts).to_tokens(ecx)
-        }
-        StmtKind::Semi(ref expr) => {
-            // Ensure the type of this is (monadically) a `()`.
-            if stmts.is_empty() {
-                stmts.push_front(ecx.stmt_expr(quote_expr!(ecx, ())));
-            }
+        Case::to_tokens(&input_expr, &self.cases)
+    }
+}
 
-            gen_expr(ecx, input, &wild, expr, stmts).to_tokens(ecx)
+#[proc_macro]
+pub fn switch(input: TokenStream) -> TokenStream {
+    match parse_switch(input) {
+        Ok(switch) => switch.to_tokens().into(),
+        Err(diag) => {
+            diag.emit();
+            TokenStream::empty()
         }
-        StmtKind::Mac(mac_stmt) => {
-            let mac = mac_stmt.into_inner().0;
-            let mac_expr = P(Expr {
-                id: stmt.id,
-                node: ExprKind::Mac(mac),
-                span: stmt.span,
-                attrs: Vec::new().into()
-            });
-
-            gen_expr(ecx, input, &wild, &mac_expr, stmts).to_tokens(ecx)
-        }
-        StmtKind::Item(item) => item.to_tokens(ecx)
     }
 }

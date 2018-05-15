@@ -120,22 +120,26 @@ impl<'a> Input for &'a str {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Position {
-    line: usize,
-    column: usize,
-    offset: usize
+    pub line: usize,
+    pub column: usize,
+    pub offset: usize
 }
 
 impl Display for Position {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "line: {}, column: {}", self.line, self.column)
+        if is_debug!() {
+            write!(f, "{}:{}", self.line, self.column)
+        } else {
+            write!(f, "line: {}, column: {}", self.line, self.column)
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Text<'a> {
+    current: &'a str,
     start: &'a str,
-    current: &'a str
 }
 
 impl<'a> From<&'a str> for Text<'a> {

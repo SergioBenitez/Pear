@@ -2,24 +2,20 @@ use std::borrow::Cow;
 use std::ops::{Index, Range};
 use std::fmt::{self, Debug};
 
-use pear::{Input, Length};
+use pear::{Input, Position, Length};
 
 pub trait AsPtr {
-    type Output;
-    fn as_ptr(&self) -> *const Self::Output;
+    fn as_ptr(&self) -> *const u8;
+    // unsafe fn from_raw<'a>(raw: *const u8, length: usize) -> &T;
 }
 
 impl AsPtr for str {
-    type Output = u8;
-
     fn as_ptr(&self) -> *const u8 {
         str::as_ptr(self)
     }
 }
 
 impl AsPtr for [u8] {
-    type Output = u8;
-
     fn as_ptr(&self) -> *const u8 {
         <[u8]>::as_ptr(self)
     }
@@ -39,9 +35,36 @@ impl<'a, T: ?Sized + ToOwned + 'a, C: Into<Cow<'a, T>>> From<C> for Indexed<'a, 
     }
 }
 
+impl<'a, T: ?Sized + ToOwned + 'a> Indexed<'a, T> {
+    #[inline(always)]
+    pub unsafe fn coerce<U: ?Sized + ToOwned>(self) -> Indexed<'a, U> {
+        match self {
+            Indexed::Indexed(a, b) => Indexed::Indexed(a, b),
+            _ => panic!("cannot convert indexed T to U unless indexed")
+        }
+    }
+}
+
+use std::ops::Add;
+
+impl<'a, T: ?Sized + ToOwned + 'a> Add for Indexed<'a, T> {
+    type Output = Indexed<'a, T>;
+
+    fn add(self, other: Indexed<'a, T>) -> Indexed<'a, T> {
+        match self {
+            Indexed::Indexed(a, b) => match other {
+                Indexed::Indexed(c, d) if b == c && a < d => Indexed::Indexed(a, d),
+                _ => panic!("+ requires indexed")
+            }
+            _ => panic!("+ requires indexed")
+        }
+    }
+}
+
 impl<'a, T: ?Sized + ToOwned + 'a> Indexed<'a, T>
     where T: Length + AsPtr + Index<Range<usize>, Output = T>
 {
+    // Returns `None` if `needle` is not a substring of `haystack`.
     pub fn checked_from(needle: &T, haystack: &T) -> Option<Indexed<'a, T>> {
         let haystack_start = haystack.as_ptr() as usize;
         let needle_start = needle.as_ptr() as usize;
@@ -59,6 +82,7 @@ impl<'a, T: ?Sized + ToOwned + 'a> Indexed<'a, T>
         Some(Indexed::Indexed(start, end))
     }
 
+    // Caller must ensure that `needle` is a substring of `haystack`.
     pub unsafe fn unchecked_from(needle: &T, haystack: &T) -> Indexed<'a, T> {
         let haystack_start = haystack.as_ptr() as usize;
         let needle_start = needle.as_ptr() as usize;
@@ -76,8 +100,13 @@ impl<'a, T: ?Sized + ToOwned + 'a> Indexed<'a, T>
         }
     }
 
+    /// Whether this string is derived from indexes or not.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Retrieves the string `self` corresponds to. If `self` is derived from
-    /// indexes, the corresponding subslice of `string` is returned. Otherwise,
+    /// indexes, the corresponding subslice of `source` is returned. Otherwise,
     /// the concrete string is returned.
     ///
     /// # Panics
@@ -140,6 +169,33 @@ impl<'a, T: ?Sized + 'a> IndexedInput<'a, T> {
     }
 }
 
+impl<'a, T: ToOwned + ?Sized + 'a> IndexedInput<'a, T> {
+    #[inline(always)]
+    pub fn cow_source(&self) -> Cow<'a, T> {
+        Cow::Borrowed(self.source)
+    }
+}
+
+impl<'a> IndexedInput<'a, [u8]> {
+    pub fn backtrack(&mut self, n: usize) -> ::pear::Result<(), Self> {
+        let source_addr = self.source.as_ptr() as usize;
+        let current_addr = self.current.as_ptr() as usize;
+        if current_addr > n && (current_addr - n) >= source_addr {
+            let size = self.current.len() + n;
+            let addr = (current_addr - n) as *const u8;
+            self.current = unsafe { ::std::slice::from_raw_parts(addr, size) };
+            Ok(())
+        } else {
+            let diag = format!("({}, {:x} in {:x})", n, current_addr, source_addr);
+            Err(pear_error!("<backtrack>", "internal error: {}", diag))
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
 macro_rules! impl_indexed_input {
     ($T:ty, token = $token:ty) => (
         impl<'a> From<&'a $T> for IndexedInput<'a, $T> {
@@ -154,7 +210,7 @@ macro_rules! impl_indexed_input {
             type InSlice = &'a $T;
             type Slice = Indexed<'static, $T>;
             type Many = Indexed<'static, $T>;
-            type Context = &'a str;
+            type Context = Context;
 
             #[inline(always)]
             fn peek(&mut self) -> Option<Self::Token> {
@@ -180,9 +236,7 @@ macro_rules! impl_indexed_input {
             fn take_many<F>(&mut self, cond: F) -> Self::Many
                 where F: FnMut(Self::Token) -> bool
             {
-                println!("Currentm: {:?}", self.current);
                 let many = self.current.take_many(cond);
-                println!("Currentm+: {:?}", self.current);
                 unsafe { Indexed::unchecked_from(many, self.source) }
             }
 
@@ -193,13 +247,39 @@ macro_rules! impl_indexed_input {
 
             #[inline(always)]
             fn is_empty(&mut self) -> bool {
-                println!("Current: {:?}", self.current);
                 self.current.is_empty()
+            }
+
+            fn context(&mut self) -> Option<Context> {
+                let offset = self.source.len() - self.current.len();
+                let bytes: &[u8] = self.current.as_ref();
+                let string = String::from_utf8(bytes.into()).ok()?;
+                Some(Context { offset, string })
             }
         }
     )
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct Context {
+    pub offset: usize,
+    pub string: String
+}
+
+impl ::std::fmt::Display for Context {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const LIMIT: usize = 7;
+        write!(f, "{}", self.offset)?;
+
+        if self.string.len() > LIMIT {
+            write!(f, " ({}..)", &self.string[..LIMIT])
+        } else if !self.string.is_empty() {
+            write!(f, " ({})", &self.string)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 impl_indexed_input!([u8], token = u8);
-// impl_indexed_input!(str, token = char);
+impl_indexed_input!(str, token = char);
