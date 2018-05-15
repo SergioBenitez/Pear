@@ -89,9 +89,9 @@ pub fn many<I: Input, O, F>(input: &mut I, f: F) -> Result<O, I>
 }
 
 #[inline(always)]
-pub fn surrounded<I: Input, O, F, P>(input: &mut I, p: P, f: F) -> Result<O, I>
-    where F: Copy + Fn(I::Token) -> bool,
-          P: Fn(&mut I) -> Result<O, I>
+pub fn surrounded<I: Input, O, F, P>(input: &mut I, mut p: P, f: F) -> Result<O, I>
+    where F: Copy + FnMut(I::Token) -> bool,
+          P: FnMut(&mut I) -> Result<O, I>
 {
     skip_while(input, f)?;
     let output = p(input)?;
