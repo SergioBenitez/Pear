@@ -314,7 +314,7 @@ fn gen_expr(
             let remake = |new_params| ExprKind::MethodCall(ty, new_params);
             remonad_params(ecx, input, binding, expr, params, false, remake)
         }
-        ExprKind::Block(block) => {
+        ExprKind::Block(block, ..) => {
             let stmt = gen_stmt(ecx, input, VecDeque::from(block.stmts.clone()));
             quote_expr!(ecx, { $stmt })
         }
