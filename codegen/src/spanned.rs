@@ -1,7 +1,7 @@
 use proc_macro::Span;
 
-use proc_macro2::TokenStream;
-use quote::{Tokens, ToTokens};
+use proc_macro2::TokenStream as TokenStream2;
+use quote::ToTokens;
 
 pub trait Spanned {
     fn span(&self) -> Span;
@@ -10,10 +10,9 @@ pub trait Spanned {
 // FIXME: Remove this once proc_macro's stabilize.
 impl<T: ToTokens> Spanned for T {
     fn span(&self) -> Span {
-        let mut tokens = Tokens::new();
+        let mut tokens = TokenStream2::empty();
         self.to_tokens(&mut tokens);
-        let token_stream = TokenStream::from(tokens);
-        let mut iter = token_stream.into_iter();
+        let mut iter = tokens.into_iter();
         let mut span = match iter.next() {
             Some(tt) => tt.span().unstable(),
             None => {

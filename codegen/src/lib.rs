@@ -14,8 +14,8 @@ mod spanned;
 use parser::Parser;
 use spanned::Spanned;
 
+use proc_macro2::TokenStream as TokenStream2;
 use proc_macro::{TokenStream, Span, Diagnostic};
-use quote::Tokens;
 use syn::visit_mut::{self, VisitMut};
 use syn::*;
 
@@ -52,7 +52,7 @@ impl VisitMut for ParserTransformer {
 
     fn visit_macro_mut(&mut self, m: &mut Macro) {
         if let Some(ref segment) = m.path.segments.last() {
-            let name = segment.value().ident.as_ref();
+            let name = segment.value().ident.to_string();
             if name == "switch" || name.starts_with("pear_") {
                 let new_stream = {
                     let (input, name, tokens) = (&self.input, &self.name, &m.tts);
@@ -72,7 +72,7 @@ fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
     })?;
 
     match first.value() {
-        FnArg::Captured(ArgCaptured { pat: Pat::Ident(pat), .. }) => Ok(pat.ident),
+        FnArg::Captured(ArgCaptured { pat: Pat::Ident(pat), .. }) => Ok(pat.ident.clone()),
         _ => Err(first.span().error("invalid type for parser input"))
     }
 }
@@ -85,7 +85,7 @@ fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
 // }
 
 // FIXME: Add the now missing `inline` optimization.
-fn parser_attribute(input: TokenStream) -> PResult<Tokens> {
+fn parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
     let input: proc_macro2::TokenStream = input.into();
     let span = input.span();
     let mut function: ItemFn = syn::parse2(input).map_err(|_| {
@@ -96,7 +96,7 @@ fn parser_attribute(input: TokenStream) -> PResult<Tokens> {
     let input_expr = Expr::Path(ExprPath {
         attrs: vec![],
         qself: None,
-        path: input_ident.into()
+        path: input_ident.clone().into()
     });
 
     let mut transformer = ParserTransformer {
@@ -110,7 +110,7 @@ fn parser_attribute(input: TokenStream) -> PResult<Tokens> {
     let new_block_tokens = {
         let fn_block = &function.block;
         let name = &function.ident;
-        let name_str: &str = name.as_ref();
+        let name_str = name.to_string();
         quote!({
             #[allow(unused_imports)]
             use ::pear::{Input, Length};
@@ -173,11 +173,11 @@ impl Pattern {
         let mut prev = None;
         if let PatternKind::Calls(ref calls) = self.kind {
             for call in calls.iter() {
-                if prev.is_none() { prev = Some(call.name); }
+                if prev.is_none() { prev = Some(call.name.clone()); }
 
                 let prev_name = prev.as_ref().unwrap();
                 if prev_name != &call.name {
-                    let mut err = if let Some(ident) = call.name {
+                    let mut err = if let Some(ref ident) = call.name {
                         ident.span().unstable()
                             .error("captured name differs from declaration")
                     } else {
@@ -298,7 +298,7 @@ fn parse_switch(input: TokenStream) -> Result<Switch, Diagnostic> {
 }
 
 impl Case {
-    fn to_tokens(input: &Expr, parser_name: &Ident, cases: &[Case]) -> Tokens {
+    fn to_tokens(input: &Expr, parser_name: &Ident, cases: &[Case]) -> TokenStream2 {
         if cases.len() == 0 {
             // FIXME: Should we allow this? What should we do if we get here?
             return quote!(panic!("THIS IS THE CASE WHERE THERE'S NO _"));
@@ -326,7 +326,9 @@ impl Case {
                 });
 
                 let name = calls.iter().map(|call| {
-                    call.name.unwrap_or(Ident::from("_"))
+                    call.name.as_ref()
+                        .map(|c| c.clone())
+                        .unwrap_or(Ident::new("_", call.span.into()))
                 });
 
                 // FIXME: We're repeating ourselves, aren't we? We alrady do
@@ -355,7 +357,7 @@ impl Case {
 }
 
 impl Switch {
-    fn to_tokens(&self) -> Tokens {
+    fn to_tokens(&self) -> TokenStream2 {
         Case::to_tokens(&self.input, &self.parser_name, &self.cases)
     }
 }
