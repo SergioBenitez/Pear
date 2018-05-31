@@ -10,18 +10,6 @@ use pear::{parser, switch};
 
 declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
-macro_rules! pear_try {
-    ([$name:ident; $input:expr] $e:expr) => {{
-        switch! { [$name;$input] result@$e => { Some(result) }, _ => { None } }
-    }};
-    ([$name:ident; $input:expr] $e:expr => $r:expr) => {{
-        switch! { [$name;$input] $e => { Some($r) }, _ => { None } }
-    }};
-    ([$name:ident; $input:expr] $pat:ident@$e:expr => $r:expr) => {{
-        switch! { [$name;$input] $pat@$e => { Some($r) }, _ => { None } }
-    }}
-}
-
 #[parser]
 fn parens<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
     eat('(')?;

@@ -47,15 +47,17 @@ macro_rules! pear_error {
     };
 }
 
+/// FIXME: This is an issue with rustc here where if `$input` is `expr`
+/// everything fails.
 #[macro_export]
 macro_rules! pear_try {
-    ([$name:ident; $input:expr] $e:expr) => {{
+    ([$name:ident; $input:ident] $e:expr) => {{
         switch! { [$name;$input] result@$e => { Some(result) }, _ => { None } }
     }};
-    ([$name:ident; $input:expr] $e:expr => $r:expr) => {{
+    ([$name:ident; $input:ident] $e:expr => $r:expr) => {{
         switch! { [$name;$input] $e => { Some($r) }, _ => { None } }
     }};
-    ([$name:ident; $input:expr] $pat:ident@$e:expr => $r:expr) => {{
+    ([$name:ident; $input:ident] $pat:ident@$e:expr => $r:expr) => {{
         switch! { [$name;$input] $pat@$e => { Some($r) }, _ => { None } }
     }}
 }
