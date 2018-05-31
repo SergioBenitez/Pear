@@ -144,7 +144,7 @@ pub fn parser(_args: TokenStream, input: TokenStream) -> TokenStream {
         Ok(tokens) => tokens.into(),
         Err(diag) => {
             diag.emit();
-            TokenStream::empty()
+            TokenStream::new()
         }
     }
 }
@@ -368,7 +368,7 @@ pub fn switch(input: TokenStream) -> TokenStream {
         Ok(switch) => switch.to_tokens().into(),
         Err(diag) => {
             diag.emit();
-            TokenStream::empty()
+            TokenStream::new()
         }
     }
 }
