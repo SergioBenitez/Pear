@@ -91,6 +91,17 @@ impl<I: Input> ParseErr<I> {
             context: None
         }
     }
+
+    #[inline(always)]
+    pub fn from_context<T>(input: &mut I, parser: &'static str, message: T) -> ParseErr<I>
+        where T: Into<Cow<'static, str>>
+    {
+        ParseErr {
+            parser,
+            expected: Expected::Custom(message.into()),
+            context: input.context()
+        }
+    }
 }
 
 impl<I: Input> fmt::Display for ParseErr<I> {

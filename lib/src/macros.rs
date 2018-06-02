@@ -43,7 +43,7 @@ macro_rules! parse {
 macro_rules! pear_error {
     ([$name:ident; $i:expr] $err:expr) => (pear_error!([$name; $i] $err,));
     ([$name:ident; $i:expr] $fmt:expr, $($arg:tt)*) => {
-        $crate::ParseErr::new(stringify!($name), format!($fmt, $($arg)*))
+        $crate::ParseErr::from_context($i, stringify!($name), format!($fmt, $($arg)*))
     };
 }
 
