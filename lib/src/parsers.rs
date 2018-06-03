@@ -105,6 +105,17 @@ pub fn take_while<I: Input, F>(input: &mut I, condition: F) -> Result<I::Many, I
     Ok(input.take_many(condition))
 }
 
+#[inline(always)]
+pub fn take_some_while_until<I: Input, F>(
+    input: &mut I,
+    mut condition: F,
+    until: I::Token,
+) -> Result<I::Many, I>
+    where F: FnMut(I::Token) -> bool
+{
+    take_some_while(input, |c| condition(c) && c != until)
+}
+
 /// Takes at most `num` inputs.
 #[inline(always)]
 pub fn take_n<I: Input>(input: &mut I, num: usize) -> Result<I::Many, I> {
@@ -262,6 +273,35 @@ pub fn collection<C: Collection<Item=O>, I: Input, O, F>(
         }
     }
 
+    Ok(collection)
+}
+
+pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
+    input: &mut I,
+    prefix_ok: bool,
+    seperator: I::Token,
+    whitespace: W,
+    mut item: F,
+) -> Result<C, I>
+    where F: FnMut(&mut I) -> Result<O, I>,
+          W: FnMut(I::Token) -> bool + Copy
+{
+    if prefix_ok {
+        skip_while(input, whitespace)?;
+        let _ = eat(input, seperator);
+        skip_while(input, whitespace)?;
+    }
+
+    let mut collection = C::new();
+    loop {
+        collection.push(item(input)?);
+        switch! { [series; input]
+            eat(seperator) => skip_while(whitespace)?,
+            _ => break
+        }
+    }
+
+    skip_while(input, whitespace)?;
     Ok(collection)
 }
 

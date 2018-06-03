@@ -119,17 +119,30 @@ impl<'a> Input for &'a str {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub struct Position {
+pub struct Position<'a> {
     pub line: usize,
     pub column: usize,
-    pub offset: usize
+    pub offset: usize,
+    pub snippet: Option<&'a str>
 }
 
-impl Display for Position {
+impl<'a> Display for Position<'a> {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const LIMIT: usize = 7;
+
         if is_debug!() {
-            write!(f, "{}:{}", self.line, self.column)
+            write!(f, "{}:{}", self.line, self.column)?;
+
+            if let Some(snippet) = self.snippet {
+                if snippet.len() > LIMIT {
+                    write!(f, " ({:?}..)", &snippet[..LIMIT])?;
+                } else if !snippet.is_empty() {
+                    write!(f, " ({:?})", snippet)?;
+                }
+            }
+
+            Ok(())
         } else {
             write!(f, "line: {}, column: {}", self.line, self.column)
         }
@@ -154,7 +167,7 @@ impl<'a> Input for Text<'a> {
     type InSlice = &'a str;
     type Slice = &'a str;
     type Many = Self::Slice;
-    type Context = Position;
+    type Context = Position<'a>;
 
     #[inline(always)]
     fn peek(&mut self) -> Option<Self::Token> {
@@ -190,14 +203,15 @@ impl<'a> Input for Text<'a> {
         self.current.is_empty()
     }
 
-    fn context(&mut self) -> Option<Position> {
+    fn context(&mut self) -> Option<Position<'a>> {
         let bytes_read = self.start.len() - self.current.len();
+        let snippet = Some(&self.start[bytes_read..]);
         let pos = if bytes_read == 0 {
-            Position { line: 0, column: 0, offset: 0 }
+            Position { line: 1, column: 0, offset: 0, snippet }
         } else {
             let string_read = &self.start[..bytes_read];
             let (count, last_line) = string_read.lines().enumerate().last().unwrap();
-            Position { line: count + 1, column: last_line.len(), offset: bytes_read }
+            Position { line: count + 1, column: last_line.len(), offset: bytes_read, snippet }
         };
 
         Some(pos)

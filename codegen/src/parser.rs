@@ -138,4 +138,3 @@ impl Parser {
         self.eof().is_ok()
     }
 }
-

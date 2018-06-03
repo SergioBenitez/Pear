@@ -39,11 +39,7 @@ fn int<'a>(string: &mut &'a str) -> ParseResult<&'a str, Expr> {
 #[parser]
 fn val<'a>(string: &mut &'a str) -> ParseResult<&'a str, Expr> {
     switch! {
-        eat('(') => {
-            let expr = surrounded(expr, char::is_whitespace);
-            eat(')');
-            expr
-        },
+        eat('(') => (surrounded(expr, char::is_whitespace), eat(')')).0,
         _ => int()
     }
 }

@@ -1,8 +1,16 @@
 #[macro_export]
 macro_rules! is_debug {
-    ($($e:tt)*) => ({
+    () => ({
         #[cfg(debug_assertions)]
         let result = ::std::env::var("PEAR_DEBUG").is_ok();
+        #[cfg(not(debug_assertions))]
+        let result = false;
+        result
+    });
+
+    ($kind:expr) => ({
+        #[cfg(debug_assertions)]
+        let result = ::std::env::var("PEAR_DEBUG").map(|v| v == $kind).unwrap_or(false);
         #[cfg(not(debug_assertions))]
         let result = false;
         result
