@@ -312,10 +312,10 @@ pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
     loop {
         skip_while(input, whitespace)?;
         collection.add(item(input)?);
+        skip_while(input, whitespace)?;
 
-        switch! { [series; input]
-            eat(seperator) => skip_while(whitespace)?,
-            _ => break
+        if !eat(input, seperator).is_ok() {
+            break
         }
     }
 
