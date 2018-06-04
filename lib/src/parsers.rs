@@ -290,9 +290,10 @@ pub fn collection<C: Collection<Item=O>, I: Input, O, F>(
     Ok(collection)
 }
 
+#[inline]
 pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
     input: &mut I,
-    prefix_ok: bool,
+    prefix_needed: bool,
     seperator: I::Token,
     whitespace: W,
     mut item: F,
@@ -300,13 +301,14 @@ pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
     where F: FnMut(&mut I) -> Result<O, I>,
           W: FnMut(I::Token) -> bool + Copy
 {
-    if prefix_ok {
-        skip_while(input, whitespace)?;
-        let _ = eat(input, seperator);
-        skip_while(input, whitespace)?;
+    let mut collection = C::new();
+
+    if prefix_needed {
+        if ::combinators::surrounded(input, |i| eat(i, seperator), whitespace).is_err() {
+            return Ok(collection);
+        }
     }
 
-    let mut collection = C::new();
     loop {
         collection.add(item(input)?);
         switch! { [series; input]
@@ -318,4 +320,3 @@ pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
     skip_while(input, whitespace)?;
     Ok(collection)
 }
-
