@@ -224,7 +224,7 @@ pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
 pub trait Collection {
     type Item;
     fn new() -> Self;
-    fn push(&mut self, item: Self::Item);
+    fn add(&mut self, item: Self::Item);
 }
 
 impl<T> Collection for Vec<T> {
@@ -234,13 +234,14 @@ impl<T> Collection for Vec<T> {
         vec![]
     }
 
-    fn push(&mut self, item: Self::Item) {
+    fn add(&mut self, item: Self::Item) {
         self.push(item);
     }
 }
 
 use std::hash::Hash;
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 impl<K: Eq + Hash, V> Collection for HashMap<K, V> {
     type Item = (K, V);
@@ -249,7 +250,20 @@ impl<K: Eq + Hash, V> Collection for HashMap<K, V> {
         HashMap::new()
     }
 
-    fn push(&mut self, item: Self::Item) {
+    fn add(&mut self, item: Self::Item) {
+        let (k, v) = item;
+        self.insert(k, v);
+    }
+}
+
+impl<K: Ord, V> Collection for BTreeMap<K, V> {
+    type Item = (K, V);
+
+    fn new() -> Self {
+        BTreeMap::new()
+    }
+
+    fn add(&mut self, item: Self::Item) {
         let (k, v) = item;
         self.insert(k, v);
     }
@@ -269,7 +283,7 @@ pub fn collection<C: Collection<Item=O>, I: Input, O, F>(
         switch! { [collection; input]
             eat(end) => break,
             eat(seperator) => continue,
-            _ => collection.push(item()?)
+            _ => collection.add(item()?)
         }
     }
 
@@ -294,7 +308,7 @@ pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
 
     let mut collection = C::new();
     loop {
-        collection.push(item(input)?);
+        collection.add(item(input)?);
         switch! { [series; input]
             eat(seperator) => skip_while(whitespace)?,
             _ => break
