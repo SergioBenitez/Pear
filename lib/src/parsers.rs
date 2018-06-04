@@ -314,7 +314,7 @@ pub fn series<C: Collection<Item=O>, I: Input, O, F, W>(
         collection.add(item(input)?);
 
         switch! { [series; input]
-            eat(seperator) => continue,
+            eat(seperator) => skip_while(whitespace)?,
             _ => break
         }
     }
