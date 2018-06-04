@@ -19,16 +19,24 @@ macro_rules! is_debug {
 
 #[macro_export]
 macro_rules! declare {
-    ($input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, Many = $m:ty)) => {
-        declare!($input $(<$($gen),+>)*($t, $s, $s, $m));
+    (pub($($inner:tt)+) $($rest:tt)*) => { _declare!([pub($($inner)+)] $($rest)*); };
+    (pub $($rest:tt)*) => { _declare!([pub] $($rest)*); };
+    ($($rest:tt)*) => { _declare!([] $($rest)*); }
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _declare {
+    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, Many = $m:ty)) => {
+        _declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $s, $m));
     };
 
-    ($input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, InSlice = $is:ty, Many = $m:ty)) => {
-        declare!($input $(<$($gen),+>)*($t, $s, $is, $m));
+    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, InSlice = $is:ty, Many = $m:ty)) => {
+        _declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $is, $m));
     };
 
-    ($input:ident $(<$($gen:tt),+>)* ($t:ty, $s:ty, $is:ty, $m:ty)) => {
-        trait $input $(<$($gen),+>)*: $crate::Input<Token=$t, Slice=$s, InSlice=$is, Many=$m> {  }
+    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* ($t:ty, $s:ty, $is:ty, $m:ty)) => {
+        $($vis)* trait $input $(<$($gen),+>)*: $crate::Input<Token=$t, Slice=$s, InSlice=$is, Many=$m> {  }
 
         impl<$($($gen,)+)* T> $input $(<$($gen)+>)* for T
             where T: $crate::Input<Token=$t, Slice=$s, InSlice=$is, Many=$m> + $($($gen),+)* {  }
