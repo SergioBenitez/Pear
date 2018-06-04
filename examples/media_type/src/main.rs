@@ -27,7 +27,7 @@ fn is_whitespace(byte: char) -> bool {
     byte == ' ' || byte == '\t'
 }
 
-declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn quoted_string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {

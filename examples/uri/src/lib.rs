@@ -128,7 +128,7 @@ use self::tables::{is_reg_name_char, is_pchar};
 **/
 
 // type Input<'a> = IndexedInput<'a, [u8]>;
-// declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
+// pear_declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
 
 // #[derive(Debug, PartialEq)]
 // pub enum Error<I: Input> {

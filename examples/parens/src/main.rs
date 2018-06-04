@@ -8,7 +8,7 @@ use pear::Result;
 use pear::parsers::*;
 use pear::{parser, switch};
 
-declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn parens<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {

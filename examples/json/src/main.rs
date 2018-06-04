@@ -29,7 +29,7 @@ fn is_num(c: char) -> bool {
     match c { '0'..='9' => true, _ => false }
 }
 
-declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn int<'a, I: Input<'a>>(input: &mut I) -> Result<i64, I> {

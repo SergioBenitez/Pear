@@ -71,7 +71,7 @@ fn is_num_char(byte: char) -> bool {
     match byte { '0'...'9' | '.' => true, _ => false }
 }
 
-declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {

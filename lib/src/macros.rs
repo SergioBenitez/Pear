@@ -18,21 +18,21 @@ macro_rules! is_debug {
 }
 
 #[macro_export]
-macro_rules! declare {
-    (pub($($inner:tt)+) $($rest:tt)*) => { _declare!([pub($($inner)+)] $($rest)*); };
-    (pub $($rest:tt)*) => { _declare!([pub] $($rest)*); };
-    ($($rest:tt)*) => { _declare!([] $($rest)*); }
+macro_rules! pear_declare {
+    (pub($($inner:tt)+) $($rest:tt)*) => { _pear_declare!([pub($($inner)+)] $($rest)*); };
+    (pub $($rest:tt)*) => { _pear_declare!([pub] $($rest)*); };
+    ($($rest:tt)*) => { _pear_declare!([] $($rest)*); }
 }
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! _declare {
+macro_rules! _pear_declare {
     ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, Many = $m:ty)) => {
-        _declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $s, $m));
+        _pear_declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $s, $m));
     };
 
     ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, InSlice = $is:ty, Many = $m:ty)) => {
-        _declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $is, $m));
+        _pear_declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $is, $m));
     };
 
     ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* ($t:ty, $s:ty, $is:ty, $m:ty)) => {
