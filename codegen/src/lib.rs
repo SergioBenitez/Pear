@@ -63,11 +63,11 @@ fn parser_decorator(
     }
 
     if let Annotatable::Item(ref item) = annotated {
-        if let ItemKind::Fn(ref decl, safety, cness, abi, ref generics, ref block) = item.node {
+        if let ItemKind::Fn(ref decl, header, ref generics, ref block) = item.node {
             let input = get_input_from_decl(ecx, decl);
             let new_inner_fn = quote_expr!(ecx, parse!($input, $block));
             let new_block = ecx.block_expr(new_inner_fn);
-            let node = ItemKind::Fn(decl.clone(), safety, cness, abi, generics.clone(), new_block);
+            let node = ItemKind::Fn(decl.clone(), header, generics.clone(), new_block);
 
             let mut new_item = item.clone().into_inner();
             new_item.node = node;
