@@ -104,7 +104,8 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<JsonValue<'a>, I> {
         peek('[') => JsonValue::Array(array()?),
         peek('"') => JsonValue::String(string()?),
         peek_if(|c| c == '-' || is_num(c)) => JsonValue::Number(number()?),
-        _ => panic!("whoops"),
+        token@peek_any() => return Err(pear_error!("unexpected input: {:?}", token)),
+        _ => return Err(pear_error!("unknown input")),
     };
 
     skip_while(is_whitespace)?;

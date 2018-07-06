@@ -79,6 +79,14 @@ pub fn peek_slice<I: Input>(input: &mut I, slice: I::InSlice) -> Result<I::Slice
 }
 
 #[inline]
+pub fn peek_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
+    match input.peek() {
+        Some(peeked) => Ok(peeked),
+        None => error(input, "peek_any", Expected::Token(None, None)),
+    }
+}
+
+#[inline]
 pub fn skip_while<I: Input, F>(input: &mut I, condition: F) -> Result<(), I>
     where F: FnMut(I::Token) -> bool
 {
@@ -217,7 +225,8 @@ pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
     if input.is_empty() {
         Ok(())
     } else {
-        error(input, "eof", Expected::EOF)
+        let next = input.peek();
+        error(input, "eof", Expected::EOF(next))
     }
 }
 

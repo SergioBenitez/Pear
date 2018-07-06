@@ -33,41 +33,44 @@ pub enum Expected<I: Input> {
     Token(Option<I::Token>, Option<I::Token>),
     Slice(Option<I::InSlice>, Option<I::Slice>),
     Custom(Cow<'static, str>),
-    EOF
+    EOF(Option<I::Token>)
 }
 
 impl<I: Input> fmt::Display for Expected<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Expected::Token(Some(expected), Some(found)) => {
-                write!(f, "expected token {:?}, but found {:?}", expected, found)
+                write!(f, "expected token {:?} but found {:?}", expected, found)
             }
             Expected::Token(None, Some(found)) => {
                 write!(f, "the token {:?} was not expected", found)
             }
             Expected::Token(Some(expected), None) => {
-                write!(f, "expected the token {:?}, but none was found", expected)
+                write!(f, "expected the token {:?} but none was found", expected)
             }
             Expected::Token(None, None) => {
-                write!(f, "expected any token, but none was found")
+                write!(f, "expected any token but none was found")
             }
             Expected::Slice(Some(ref expected), Some(ref found)) => {
-                write!(f, "expected slice {:?}, but found {:?}", expected, found)
+                write!(f, "expected slice {:?} but found {:?}", expected, found)
             }
             Expected::Slice(None, Some(ref found)) => {
                 write!(f, "the slice {:?} was not expected", found)
             }
             Expected::Slice(Some(ref expected), None) => {
-                write!(f, "expected the slice {:?}, but none was found", expected)
+                write!(f, "expected the slice {:?} but none was found", expected)
             }
             Expected::Slice(None, None) => {
-                write!(f, "expected any slice, but none was found")
+                write!(f, "expected any slice but none was found")
             }
             Expected::Custom(ref message) => {
                 write!(f, "{}", message)
             }
-            Expected::EOF => {
+            Expected::EOF(None) => {
                 write!(f, "expected EOF but input remains")
+            }
+            Expected::EOF(Some(token)) => {
+                write!(f, "expected EOF but found {:?}", token)
             }
         }
     }
