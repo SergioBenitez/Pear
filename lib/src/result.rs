@@ -110,9 +110,11 @@ impl<I: Input> ParseErr<I> {
 impl<I: Input> fmt::Display for ParseErr<I> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "'{}': {}", self.parser, self.expected)?;
+        write!(f, "{}", self.expected)?;
         if let Some(ref context) = self.context {
-            write!(f, " ({})", context)?;
+            write!(f, " ({} at {})", self.parser, context)?;
+        } else {
+            write!(f, " ({})", self.parser)?;
         }
 
         Ok(())
