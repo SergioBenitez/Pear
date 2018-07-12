@@ -7,7 +7,11 @@ use {Result, Input, Length, Expected, ParseErr, switch};
 //   - escaped string, with some way to configure escapes
 
 #[inline(always)]
-pub fn error<I: Input, R>(input: &mut I, parser: &'static str, expected: Expected<I>) -> Result<R, I> {
+pub fn error<I: Input, R>(
+    input: &mut I,
+    parser: &'static str,
+    expected: Expected<I::Token, I::InSlice, I::Slice>
+) -> Result<R, I> {
     Err(ParseErr { parser, expected, context: input.context() })
 }
 

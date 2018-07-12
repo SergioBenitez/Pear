@@ -1,4 +1,4 @@
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Display};
 
 pub trait Length {
     fn len(&self) -> usize;
@@ -39,10 +39,10 @@ impl Length for String {
     }
 }
 
-pub trait Input: Sized + Debug {
-    type Token: PartialEq + Copy + Debug;
-    type Slice: PartialEq + Clone + Debug + Length;
-    type InSlice: PartialEq + Clone + Debug + Length;
+pub trait Input: Sized {
+    type Token: PartialEq + Copy;
+    type Slice: PartialEq + Clone + Length;
+    type InSlice: PartialEq + Clone + Length;
     type Many: Length;
     type Context: Display;
 

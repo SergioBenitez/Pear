@@ -1,6 +1,7 @@
 #![feature(proc_macro)]
 #![feature(core_intrinsics)]
 #![feature(proc_macro_non_items)]
+#![feature(specialization)]
 
 #[allow(unused_imports)] #[macro_use] extern crate pear_codegen;
 #[doc(hidden)] pub use pear_codegen::*;
