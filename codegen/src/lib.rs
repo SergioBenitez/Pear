@@ -300,7 +300,7 @@ fn gen_expr(
                 debug!("not whitelisted! inserted input for: {:?}", fn_name);
                 let remake = |mut new_params: Vec<P<Expr>>| {
                     // Ensure we don't insert the input twice.
-                    if new_params.is_empty() || &new_params[0] != input {
+                    if new_params.is_empty() || new_params[0].span != input.span {
                         new_params.insert(0, input.clone());
                     }
 
