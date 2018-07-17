@@ -1,5 +1,4 @@
-#![feature(proc_macro)]
-#![feature(proc_macro_non_items)]
+#![feature(proc_macro_non_items, use_extern_macros)]
 
 #[macro_use] extern crate pear;
 

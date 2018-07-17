@@ -5,8 +5,8 @@ use yansi::Color::{Red, Yellow, Blue, White};
 use version_check::{supports_features, is_min_version, is_min_date};
 
 // Specifies the minimum nightly version needed to compile Pear.
-const MIN_DATE: &'static str = "2018-04-14";
-const MIN_VERSION: &'static str = "1.27.0-nightly";
+const MIN_DATE: &'static str = "2018-07-16";
+const MIN_VERSION: &'static str = "1.29.0-nightly";
 
 fn main() {
     let ok_channel = supports_features();
