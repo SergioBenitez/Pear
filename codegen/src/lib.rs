@@ -16,7 +16,7 @@ use syntax::tokenstream::{TokenTree, TokenStream, ThinTokenStream};
 use syntax::parse::PResult;
 use syntax::parse::token::Token;
 use syntax::parse::parser::Parser;
-use syntax::codemap::{Span, DUMMY_SP};
+use syntax::source_map::{Span, DUMMY_SP};
 use syntax::ext::base::{DummyResult, ExtCtxt, MacResult, MacEager};
 
 use syntax::ext::build::AstBuilder;
