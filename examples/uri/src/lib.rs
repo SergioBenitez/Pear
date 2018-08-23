@@ -1,4 +1,4 @@
-#![feature(proc_macro_non_items, use_extern_macros)]
+#![feature(proc_macro_non_items)]
 #![allow(unused_imports, dead_code)]
 
 #[macro_use] extern crate pear;
