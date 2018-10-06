@@ -1,5 +1,5 @@
 #![feature(core_intrinsics)]
-#![feature(proc_macro_non_items)]
+#![feature(proc_macro_hygiene)]
 #![feature(specialization)]
 
 #[allow(unused_imports)] #[macro_use] extern crate pear_codegen;
