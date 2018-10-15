@@ -1,4 +1,4 @@
-#![feature(core_intrinsics)]
+#![feature(crate_visibility_modifier)]
 #![feature(proc_macro_diagnostic, proc_macro_span)]
 #![recursion_limit="256"]
 
@@ -7,18 +7,16 @@ extern crate proc_macro2;
 extern crate syn;
 #[macro_use] extern crate quote;
 
-mod parser;
 mod spanned;
+mod parser;
 
-use parser::Parser;
+use parser::*;
 use spanned::Spanned;
 
-use proc_macro2::TokenStream as TokenStream2;
-use proc_macro::{TokenStream, Span, Diagnostic};
-use syn::visit_mut::{self, VisitMut};
 use syn::*;
-
-type PResult<T> = Result<T, Diagnostic>;
+use proc_macro2::TokenStream as TokenStream2;
+use proc_macro::TokenStream;
+use syn::visit_mut::{self, VisitMut};
 
 #[derive(Copy, Clone)]
 enum State {
@@ -66,22 +64,15 @@ impl VisitMut for ParserTransformer {
 
 fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
     let first = f.decl.inputs.first().ok_or_else(|| {
-        let paren_span = f.decl.paren_token.0.unstable();
+        let paren_span = f.decl.paren_token.span.unstable();
         paren_span.error("parsing functions require at least one input")
     })?;
 
     match first.value() {
         FnArg::Captured(ArgCaptured { pat: Pat::Ident(pat), .. }) => Ok(pat.ident.clone()),
-        _ => Err(first.span().error("invalid type for parser input"))
+        _ => Err(first.span().error("invalid type for parser input").into())
     }
 }
-
-// fn ty_from(ret_ty: &ReturnType) -> Box<Type> {
-//     match *ret_ty {
-//         ReturnType::Type(_, ref ty) => ty.clone(),
-//         _ => Box::new(syn::parse2(quote!(()).into()).unwrap())
-//     }
-// }
 
 // FIXME: Add the now missing `inline` optimization.
 fn parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
@@ -148,162 +139,14 @@ pub fn parser(_args: TokenStream, input: TokenStream) -> TokenStream {
     }
 }
 
-#[derive(Debug)]
-struct CallPattern {
-    name: Option<Ident>,
-    expr: ExprCall,
-    span: Span,
-}
-
-#[derive(Debug)]
-enum PatternKind {
-    Wild,
-    Calls(Vec<CallPattern>)
-}
-
-#[derive(Debug)]
-struct Pattern {
-    kind: PatternKind,
-    span: Span,
-}
-
-impl Pattern {
-    fn validate(&self) -> parser::Result<()> {
-        let mut prev = None;
-        if let PatternKind::Calls(ref calls) = self.kind {
-            for call in calls.iter() {
-                if prev.is_none() { prev = Some(call.name.clone()); }
-
-                let prev_name = prev.as_ref().unwrap();
-                if prev_name != &call.name {
-                    let mut err = if let Some(ref ident) = call.name {
-                        ident.span().unstable()
-                            .error("captured name differs from declaration")
-                    } else {
-                        call.expr.span()
-                            .error("expected capture name due to previous declaration")
-                    };
-
-                    err = match prev_name {
-                        Some(p) => err.span_note(p.span().unstable(), "declared here"),
-                        None => err
-                    };
-
-                    return Err(err);
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-struct Case {
-    pattern: Pattern,
-    expr: Expr,
-    span: Span,
-}
-
-#[derive(Debug)]
-struct Switch {
-    parser_name: Ident,
-    input: Expr,
-    cases: Vec<Case>
-}
-
-fn parse_expr_call(parser: &mut Parser) -> parser::Result<ExprCall> {
-    use parser::Delimiter::*;
-    use syn::{punctuated::Punctuated, token::{Comma, Paren}};
-
-    let path: ExprPath = parser.parse()?;
-    let paren_span = parser.current_span();
-    let args = parser.parse_group(Parenthesis, |p| {
-        p.parse_synom("call params", <Punctuated<Expr, Comma>>::parse_terminated)
-    })?;
-
-    Ok(ExprCall {
-        attrs: vec![],
-        func: Box::new(Expr::Path(path)),
-        paren_token: Paren(paren_span.into()),
-        args: args
-    })
-}
-
-fn parse_switch(input: TokenStream) -> Result<Switch, Diagnostic> {
-    use parser::{Seperator::*, Delimiter::*};
-
-    let mut parser = Parser::new(input);
-    let (parser_name, input) = parser.parse_group(Bracket, |p| {
-        let name = p.parse::<Ident>()?;
-        p.parse::<token::Semi>()?;
-        let input = p.parse::<Expr>()?;
-        Ok((name, input))
-    })?;
-
-    let cases: Vec<Case> = parser.parse_sep(Comma, |parser| {
-        let case_span_start = parser.current_span();
-
-        let pattern = if parser.eat::<PatWild>() {
-            Pattern {
-                kind: PatternKind::Wild,
-                span: case_span_start
-            }
-        } else {
-            let call_patterns = parser.parse_sep(Pipe, |parser| {
-                let start_span = parser.current_span();
-                let name = parser.try_parse(|p| {
-                    let ident = p.parse::<Ident>()?;
-                    p.parse::<token::At>()?;
-                    Ok(ident)
-                }).ok();
-
-                let expr = parse_expr_call(parser)?;
-                let span = start_span.join(parser.current_span()).unwrap();
-                Ok(CallPattern { name, expr, span })
-            })?;
-
-            Pattern {
-                kind: PatternKind::Calls(call_patterns),
-                span: case_span_start.join(parser.current_span()).unwrap()
-            }
-        };
-
-        pattern.validate()?;
-        parser.parse::<token::FatArrow>()?;
-        let expr: Expr = parser.parse()?;
-        let span = case_span_start.join(parser.current_span()).unwrap();
-
-        Ok(Case { pattern, expr, span })
-    })?;
-
-    if !parser.is_eof() {
-        parser.current_span()
-            .error("trailing characters; expected eof")
-            .help("perhaps a comma `,` is missing?")
-            .emit();
-    }
-
-    for (i, case) in cases.iter().enumerate() {
-        if let PatternKind::Wild = case.pattern.kind {
-            if i != cases.len() - 1 {
-                return Err(case.span.error("`_` matches can only appear as the last case"));
-            }
-        }
-
-    }
-
-    Ok(Switch { parser_name, input, cases })
-}
-
 impl Case {
-    fn to_tokens(input: &Expr, parser_name: &Ident, cases: &[Case]) -> TokenStream2 {
-        if cases.len() == 0 {
-            // FIXME: Should we allow this? What should we do if we get here?
-            return quote!(panic!("THIS IS THE CASE WHERE THERE'S NO _"));
-        }
-
-        let (this, rest) = (&cases[0], &cases[1..]);
+    fn to_tokens<'a, I>(input: &Expr, parser_name: &Ident, mut cases: I) -> TokenStream2
+        where I: Iterator<Item = &'a Case>
+    {
+        let this = match cases.next() {
+            None => return quote!(),
+            Some(case) => case
+        };
 
         let mut transformer = ParserTransformer {
             input: input.clone(),
@@ -314,9 +157,9 @@ impl Case {
         let mut case_expr = this.expr.clone();
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
 
-        match this.pattern.kind {
-            PatternKind::Wild => quote!(#case_expr),
-            PatternKind::Calls(ref calls) => {
+        match this.pattern {
+            Pattern::Wild(..) => quote!(#case_expr),
+            Pattern::Calls(ref calls) => {
                 let prefix = (0..calls.len()).into_iter().map(|i| {
                     match i {
                         0 => quote!(if),
@@ -327,7 +170,7 @@ impl Case {
                 let name = calls.iter().map(|call| {
                     call.name.as_ref()
                         .map(|c| c.clone())
-                        .unwrap_or(Ident::new("_", call.span.into()))
+                        .unwrap_or(Ident::new("_", call.span().into()))
                 });
 
                 // FIXME: We're repeating ourselves, aren't we? We alrady do
@@ -339,7 +182,7 @@ impl Case {
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(&input, parser_name, rest);
+                let rest_tokens = Case::to_tokens(&input, parser_name, cases);
 
                 quote! {
                     #(
@@ -357,16 +200,19 @@ impl Case {
 
 impl Switch {
     fn to_tokens(&self) -> TokenStream2 {
-        Case::to_tokens(&self.input, &self.parser_name, &self.cases)
+        Case::to_tokens(&self.input, &self.parser_name, self.cases.iter())
     }
 }
 
 #[proc_macro]
 pub fn switch(input: TokenStream) -> TokenStream {
-    match parse_switch(input) {
+    // TODO: We lose diagnostic information by using syn's thing here. We need a
+    // way to get a SynParseStream from a TokenStream to not do that.
+    use syn::parse::Parser;
+    match Switch::syn_parse.parse(input) {
         Ok(switch) => switch.to_tokens().into(),
-        Err(diag) => {
-            diag.emit();
+        Err(e) => {
+            Diagnostic::emit(e.into());
             TokenStream::new()
         }
     }

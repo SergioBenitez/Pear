@@ -1,140 +1,242 @@
-#![allow(dead_code)]
+use proc_macro::Span;
 
-use syn::token;
-use syn::synom::Synom;
-use syn::buffer::{Cursor, TokenBuffer};
-use syn::synom::PResult;
+use syn::Token;
+use syn::punctuated::Punctuated;
+use syn::parse::{Parse as SynParse, ParseStream as SynParseStream};
+use proc_macro2::Delimiter;
+use spanned::Spanned;
 
-use proc_macro::{TokenStream, Span, Diagnostic};
+#[derive(Debug)]
+crate struct Diagnostic(crate ::proc_macro::Diagnostic);
 
-pub use proc_macro2::Delimiter;
-
-pub type Result<T> = ::std::result::Result<T, Diagnostic>;
-
-pub enum Seperator {
-    Comma,
-    Pipe,
-    Semi,
+impl Diagnostic {
+    pub fn emit(self) {
+        self.0.emit();
+    }
 }
 
-pub struct Parser {
-    buffer: Box<TokenBuffer>,
-    cursor: Cursor<'static>,
+impl From<::proc_macro::Diagnostic> for Diagnostic {
+    fn from(original: ::proc_macro::Diagnostic) -> Diagnostic {
+        Diagnostic(original)
+    }
 }
 
-impl Parser {
-    /// Creates a new parser that will feed off of `tokens`.
-    pub fn new(tokens: TokenStream) -> Parser {
-        let buffer = Box::new(TokenBuffer::new(tokens.into()));
-        let cursor = unsafe {
-            let buffer: &'static TokenBuffer = ::std::mem::transmute(&*buffer);
-            buffer.begin()
-        };
-
-        Parser {
-            buffer: buffer,
-            cursor: cursor,
-        }
+impl From<::syn::parse::Error> for Diagnostic {
+    fn from(e: ::syn::parse::Error) -> Diagnostic {
+        let inner = ::proc_macro::Diagnostic::spanned(
+            e.span().unstable(), ::proc_macro::Level::Error, e.to_string());
+        Diagnostic(inner)
     }
+}
 
-    pub fn remaining_stream(&self) -> TokenStream {
-        self.cursor.token_stream().into()
-    }
-
-    /// Returns the `Span` of token that will be parsed next.
-    pub fn current_span(&self) -> Span {
-        self.cursor.token_tree()
-            .map(|_| self.cursor.span().unstable())
-            .unwrap_or_else(|| Span::call_site())
-    }
-
-    /// Parses the current tokens into a type `T`.
-    pub fn parse<T: Synom>(&mut self) -> Result<T> {
-        let description = match T::description() {
-            Some(desc) => desc,
-            None => unsafe { ::std::intrinsics::type_name::<T>() }
-        };
-
-        self.parse_synom(description, T::parse)
-    }
-
-    pub fn parse_synom<F, T>(&mut self, desc: &str, f: F) -> Result<T>
-        where F: FnOnce(Cursor) -> PResult<T>
-    {
-        f(self.cursor).map(|(value, next_cursor)| {
-            self.cursor = next_cursor;
-            value
-        }).map_err(|e| {
-            self.current_span().error(format!("{}: expected {}", e, desc))
-        })
-    }
-
-    pub fn eat<T: Synom>(&mut self) -> bool {
-        self.try_parse(|p| p.parse::<T>()).is_ok()
-    }
-
-    pub fn try_parse<F, T>(&mut self, f: F) -> Result<T>
-        where F: FnOnce(&mut Parser) -> Result<T>
-    {
-        let saved_cursor = self.cursor;
-        f(self).map_err(|e| { self.cursor = saved_cursor; e })
-    }
-
-    /// Parses inside of a group using `f` delimited by `delim`.
-    pub fn parse_group<F, T>(&mut self, delim: Delimiter, f: F) -> Result<T>
-        where F: FnOnce(&mut Parser) -> Result<T>
-    {
-        if let Some((group_cursor, _, next_cursor)) = self.cursor.group(delim) {
-            self.cursor = group_cursor;
-            let result = f(self);
-            self.cursor = next_cursor;
-            result
+impl Into<::syn::parse::Error> for Diagnostic {
+    fn into(self) -> ::syn::parse::Error {
+        let span = if self.0.spans().is_empty() {
+            Span::call_site()
         } else {
-            let expected = match delim {
-                Delimiter::Brace => "curly braced group",
-                Delimiter::Bracket => "square bracketed group",
-                Delimiter::Parenthesis => "parenthesized group",
-                Delimiter::None => "invisible group"
-            };
+            self.0.spans()[0]
+        };
 
-            Err(self.current_span()
-                .error(format!("parse error: expected {}", expected)))
-        }
+        ::syn::parse::Error::new(span.into(), self.0.message())
     }
+}
 
-    /// Parses a `sep` separated list of `T`s and returns the `Vec`.
-    pub fn parse_sep<F, T>(&mut self, sep: Seperator, mut f: F) -> Result<Vec<T>>
-        where F: FnMut(&mut Parser) -> Result<T>
+impl ::std::ops::Deref for Diagnostic {
+    type Target = ::proc_macro::Diagnostic;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+crate type PResult<T> = Result<T, Diagnostic>;
+
+crate trait Parse: Sized {
+    fn parse(input: syn::parse::ParseStream) -> PResult<Self>;
+
+    fn syn_parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        Self::parse(input).map_err(|e| e.into())
+    }
+}
+
+trait ParseStreamExt {
+    fn parse_group<F, G>(self, delimiter: Delimiter, parser: F) -> syn::parse::Result<G>
+        where F: FnOnce(SynParseStream) -> syn::parse::Result<G>;
+
+    fn try_parse<F, G>(self, parser: F) -> syn::parse::Result<G>
+        where F: Fn(SynParseStream) -> syn::parse::Result<G>;
+}
+
+impl<'a> ParseStreamExt for SynParseStream<'a> {
+    fn parse_group<F, G>(self, delimiter: Delimiter, parser: F) -> syn::parse::Result<G>
+        where F: FnOnce(SynParseStream) -> syn::parse::Result<G>
     {
-        let mut output = vec![];
-        while !self.is_eof() {
-            output.push(f(self)?);
-            let have_sep = match sep {
-                Seperator::Comma => self.eat::<token::Comma>(),
-                Seperator::Pipe => self.eat::<token::Or>(),
-                Seperator::Semi => self.eat::<token::Semi>(),
-            };
-
-            if !have_sep {
-                break;
-            }
+        let content;
+        match delimiter {
+            Delimiter::Brace => { syn::braced!(content in self); },
+            Delimiter::Bracket => { syn::bracketed!(content in self); },
+            Delimiter::Parenthesis => { syn::parenthesized!(content in self); },
+            Delimiter::None => return parser(self),
         }
 
-        Ok(output)
+        parser(&content)
     }
 
-    pub fn eof(&self) -> Result<()> {
-        if !self.cursor.eof() {
-            let diag = self.current_span()
-                .error("trailing characters; expected eof");
+    fn try_parse<F, G>(self, parser: F) -> syn::parse::Result<G>
+        where F: Fn(SynParseStream) -> syn::parse::Result<G>
+    {
+        let input = self.fork();
+        parser(&input)?;
+        parser(self)
+    }
+}
 
-            return Err(diag);
+#[derive(Debug)]
+crate struct CallPattern {
+    crate name: Option<syn::Ident>,
+    crate expr: syn::ExprCall,
+}
+
+impl syn::parse::Parse for CallPattern {
+    fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        Self::syn_parse(input)
+    }
+}
+
+impl Spanned for CallPattern {
+    fn span(&self) -> Span {
+        match self.name {
+            Some(ref name) => name.span().unstable().join(self.expr.span()).unwrap(),
+            None => self.expr.span()
+        }
+    }
+}
+
+#[derive(Debug)]
+crate enum Pattern {
+    Wild(Token![_]),
+    Calls(Punctuated<CallPattern, Token![|]>)
+}
+
+#[derive(Debug)]
+crate struct Case {
+    crate pattern: Pattern,
+    crate expr: syn::Expr,
+    crate span: Span,
+}
+
+#[derive(Debug)]
+crate struct Switch {
+    crate parser_name: syn::Ident,
+    crate input: syn::Expr,
+    crate cases: Punctuated<Case, Token![,]>
+}
+
+// FIXME(syn): Something like this should be in `syn`
+fn parse_expr_call(input: SynParseStream) -> syn::parse::Result<syn::ExprCall> {
+    let path: syn::ExprPath = input.parse()?;
+    let paren_span = input.cursor().span();
+    let args: Punctuated<syn::Expr, Token![,]> = input.parse_group(Delimiter::Parenthesis, |i| {
+        i.parse_terminated(syn::Expr::parse)
+    })?;
+
+    Ok(syn::ExprCall {
+        attrs: vec![],
+        func: Box::new(syn::Expr::Path(path)),
+        paren_token: syn::token::Paren(paren_span),
+        args: args
+    })
+}
+
+impl Parse for CallPattern {
+    fn parse(input: SynParseStream) -> PResult<Self> {
+        let name = input.try_parse(|input| {
+            let ident: syn::Ident = input.parse()?;
+            input.parse::<Token![@]>()?;
+            Ok(ident)
+        }).ok();
+
+        Ok(CallPattern { name, expr: parse_expr_call(input)? })
+    }
+}
+
+impl Pattern {
+    fn validate(&self) -> PResult<()> {
+        let mut prev = None;
+        if let Pattern::Calls(ref calls) = self {
+            for call in calls.iter() {
+                if prev.is_none() { prev = Some(call.name.clone()); }
+
+                let prev_name = prev.as_ref().unwrap();
+                if prev_name != &call.name {
+                    let mut err = if let Some(ref ident) = call.name {
+                        ident.span().unstable()
+                            .error("captured name differs from declaration")
+                    } else {
+                        call.expr.span()
+                            .error("expected capture name due to previous declaration")
+                    };
+
+                    err = match prev_name {
+                        Some(p) => err.span_note(p.span().unstable(), "declared here"),
+                        None => err
+                    };
+
+                    return Err(err.into());
+                }
+            }
         }
 
         Ok(())
     }
+}
 
-    pub fn is_eof(&self) -> bool {
-        self.eof().is_ok()
+impl Parse for Case {
+    fn parse(input: SynParseStream) -> PResult<Self> {
+        let case_span_start = input.cursor().span().unstable();
+
+        let pattern = if let Ok(wild) = input.parse::<Token![_]>() {
+            Pattern::Wild(wild)
+        } else {
+            let call_patterns =
+                input.call(<Punctuated<CallPattern, Token![|]>>::parse_separated_nonempty)?;
+
+            Pattern::Calls(call_patterns)
+        };
+
+        pattern.validate()?;
+        input.parse::<Token![=>]>()?;
+        let expr: syn::Expr = input.parse()?;
+        let span = case_span_start.join(input.cursor().span().unstable()).unwrap();
+
+        Ok(Case { pattern, expr, span })
+    }
+}
+
+impl Parse for Switch {
+    fn parse(stream: SynParseStream) -> PResult<Switch> {
+        let (parser_name, input) = stream.parse_group(Delimiter::Bracket, |inner| {
+            let name: syn::Ident = inner.parse()?;
+            inner.parse::<Token![;]>()?;
+            let input: syn::Expr = inner.parse()?;
+            Ok((name, input))
+        })?;
+
+        let cases: Punctuated<Case, Token![,]> = stream.parse_terminated(Case::syn_parse)?;
+        if !stream.is_empty() {
+            Err(stream.error("trailing characters; expected eof"))?;
+        }
+
+        if cases.is_empty() {
+            Err(stream.error("switch cannot be empty"))?;
+        }
+
+        for case in cases.iter().take(cases.len() - 1) {
+            if let Pattern::Wild(..) = case.pattern {
+                Err(case.span.error("`_` matches can only appear as the last case"))?;
+            }
+        }
+
+        Ok(Switch { parser_name, input, cases })
     }
 }
