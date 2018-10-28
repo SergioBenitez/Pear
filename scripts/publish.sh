@@ -10,7 +10,7 @@ LIB_DIR="${SCRIPT_DIR}/../lib"
 CODEGEN_DIR="${SCRIPT_DIR}/../codegen"
 
 # Publish all the things.
-for dir in "${LIB_DIR}" "${CODEGEN_DIR}"; do
+for dir in "${CODEGEN_DIR}" "${LIB_DIR}"; do
   pushd ${dir}
   echo ":::: Publishing '${dir}..."
   cargo publish
