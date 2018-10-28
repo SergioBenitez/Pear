@@ -6,4 +6,4 @@ description = "A pear is a fruit."
 license = "MIT/Apache-2.0"
 
 [dependencies]
-pear_codegen = { path = "../codegen" }
+pear_codegen = { version = "0.1", path = "../codegen" }
