@@ -25,6 +25,13 @@ impl<T> Length for [T] {
     }
 }
 
+impl<T> Length for Vec<T> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        <Vec<T>>::len(self)
+    }
+}
+
 impl<'a> Length for &'a str {
     #[inline(always)]
     fn len(&self) -> usize {
