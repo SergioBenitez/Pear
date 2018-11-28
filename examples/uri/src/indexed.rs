@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ops::{Index, Range};
 use std::fmt::{self, Debug};
 
-use pear::{Input, Position, Length};
+use pear::{Input, Slice, Position, Length};
 
 pub trait AsPtr {
     fn as_ptr(&self) -> *const u8;
@@ -205,52 +205,89 @@ macro_rules! impl_indexed_input {
             }
         }
 
+        impl<'a, 'b: 'a> Slice<IndexedInput<'a, $T>> for &'b $T {
+            fn eq_slice(&self, other: &Indexed<'a, $T>) -> bool {
+                self == &other.to_source(&None)
+            }
+
+            fn into_slice(self) -> Indexed<'a, $T> {
+                Indexed::Concrete(self.into())
+            }
+        }
+
         impl<'a> Input for IndexedInput<'a, $T> {
             type Token = $token;
-            type InSlice = &'a $T;
-            type Slice = Indexed<'static, $T>;
-            type Many = Indexed<'static, $T>;
+            type Slice = Indexed<'a, $T>;
+            type Many = Indexed<'a, $T>;
             type Context = Context;
 
-            #[inline(always)]
-            fn peek(&mut self) -> Option<Self::Token> {
-                self.current.peek()
+            /// Returns a copy of the current token, if there is one.
+            fn token(&mut self) -> Option<Self::Token> {
+                self.current.token()
             }
 
-            #[inline(always)]
-            fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
-                self.current.peek_slice(slice)
-                    .map(|slice| unsafe {
-                        Indexed::unchecked_from(slice, self.source)
-                    })
+            /// Returns a copy of the current slice of size `n`, if there is one.
+            fn slice(&mut self, n: usize) -> Option<Self::Slice> {
+                self.current.slice(n)
+                    .map(|s| unsafe { Indexed::unchecked_from(s, self.source) })
             }
 
-            #[inline(always)]
-            fn skip_many<F>(&mut self, cond: F) -> usize
-                where F: FnMut(Self::Token) -> bool
+            /// Checks if the current token fulfills `cond`.
+            fn peek<F>(&mut self, cond: F) -> bool
+                where F: FnMut(&Self::Token) -> bool
             {
-                self.current.skip_many(cond)
+                self.current.peek(cond)
             }
 
-            #[inline(always)]
-            fn take_many<F>(&mut self, cond: F) -> Self::Many
-                where F: FnMut(Self::Token) -> bool
+            /// Checks if the current slice of size `n` (if any) fulfills `cond`.
+            fn peek_slice<F>(&mut self, n: usize, mut cond: F) -> bool
+                where F: FnMut(&Self::Slice) -> bool
             {
-                let many = self.current.take_many(cond);
+                self.current.peek_slice(n, |&s| cond(&Indexed::Concrete(s.into())))
+            }
+
+            /// Checks if the current token fulfills `cond`. If so, the token is
+            /// consumed and returned. Otherwise, returrustc --explain E0284ns `None`.
+            fn eat<F>(&mut self, cond: F) -> Option<Self::Token>
+                where F: FnMut(&Self::Token) -> bool
+            {
+                self.current.eat(cond)
+            }
+
+            /// Checks if the current slice of size `n` (if any) fulfills `cond`. If so,
+            /// the slice is consumed and returned. Otherwise, returns `None`.
+            fn eat_slice<F>(&mut self, n: usize, mut cond: F) -> Option<Self::Slice>
+                where F: FnMut(&Self::Slice) -> bool
+            {
+                self.current
+                    .eat_slice(n, |&s| cond(&Indexed::Concrete(s.into())))
+                    .map(|s| unsafe { Indexed::unchecked_from(s, self.source) })
+            }
+
+            /// Takes tokens while `cond` returns true, collecting them into a
+            /// `Self::Many` and returning it.
+            fn take<F>(&mut self, cond: F) -> Self::Many
+                where F: FnMut(&Self::Token) -> bool
+            {
+                let many = self.current.take(cond);
                 unsafe { Indexed::unchecked_from(many, self.source) }
             }
 
-            #[inline(always)]
-            fn advance(&mut self, count: usize) {
-                self.current.advance(count)
+            /// Skips tokens while `cond` returns true. Returns the number of skipped
+            /// tokens.
+            fn skip<F>(&mut self, cond: F) -> usize
+                where F: FnMut(&Self::Token) -> bool
+            {
+                self.current.skip(cond)
+            }
+
+            /// Returns `true` if there are no more tokens.
+            fn is_eof(&mut self) -> bool {
+                self.current.is_eof()
             }
 
             #[inline(always)]
-            fn is_empty(&mut self) -> bool {
-                self.current.is_empty()
-            }
-
-            fn context(&mut self) -> Option<Context> {
+            fn context(&mut self) -> Option<Self::Context> {
                 let offset = self.source.len() - self.current.len();
                 let bytes: &[u8] = self.current.as_ref();
                 let string = String::from_utf8(bytes.into()).ok()?;

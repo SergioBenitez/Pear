@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! is_debug {
+macro_rules! is_pear_debug {
     () => ({
         #[cfg(debug_assertions)]
         let result = ::std::env::var("PEAR_DEBUG").is_ok();
@@ -28,18 +28,14 @@ macro_rules! pear_declare {
 #[macro_export]
 macro_rules! _pear_declare {
     ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, Many = $m:ty)) => {
-        _pear_declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $s, $m));
+        _pear_declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $m));
     };
 
-    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* (Token = $t:ty, Slice = $s:ty, InSlice = $is:ty, Many = $m:ty)) => {
-        _pear_declare!([$($vis)*] $input $(<$($gen),+>)*($t, $s, $is, $m));
-    };
-
-    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* ($t:ty, $s:ty, $is:ty, $m:ty)) => {
-        $($vis)* trait $input $(<$($gen),+>)*: $crate::Input<Token=$t, Slice=$s, InSlice=$is, Many=$m> {  }
+    ([$($vis:tt)*] $input:ident $(<$($gen:tt),+>)* ($t:ty, $s:ty, $m:ty)) => {
+        $($vis)* trait $input $(<$($gen),+>)*: $crate::Input<Token=$t, Slice=$s, Many=$m> {  }
 
         impl<$($($gen,)+)* T> $input $(<$($gen)+>)* for T
-            where T: $crate::Input<Token=$t, Slice=$s, InSlice=$is, Many=$m> + $($($gen),+)* {  }
+            where T: $crate::Input<Token=$t, Slice=$s, Many=$m> + $($($gen),+)* {  }
     }
 }
 

@@ -487,7 +487,7 @@ fn path_and_query<'a>(input: &mut RawInput<'a>) -> Result<'a, Origin<'a>> {
 
 #[parser]
 fn port<'a>(input: &mut RawInput<'a>) -> Result<'a, u16> {
-    let port_str = take_n_while(5, |c| c >= b'0' && c <= b'9')?;
+    let port_str = take_n_while(5, |&c| c >= b'0' && c <= b'9')?;
 
     let mut port_num: u32 = 0;
     let source = &Some(input.cow_source());
@@ -509,7 +509,7 @@ fn authority<'a>(
     user_info: Option<Indexed<'a, [u8]>>
 ) -> Result<'a, Authority<'a>> {
     let host = switch! {
-        peek(b'[') => Host::Bracketed(delimited(b'[', is_pchar, b']')?),
+        peek(b'[') => Host::Bracketed(delimited_some(b'[', is_pchar, b']')?),
         _ => Host::Raw(take_while(is_reg_name_char)?)
     };
 
@@ -525,8 +525,8 @@ fn absolute<'a>(
     scheme: Indexed<'a, [u8]>
 ) -> Result<'a, Absolute<'a>> {
     let (authority, path_and_query) = switch! {
-        eat_slice(b"://") => {
-            let left = take_while(|c| is_reg_name_char(c) || c == b':')?;
+        eat_slice(&b"://"[..]) => {
+            let left = take_while(|c| is_reg_name_char(c) || *c == b':')?;
             let authority = switch! {
                 eat(b'@') => authority(Some(left))?,
                 _ => {
@@ -552,11 +552,11 @@ fn absolute_or_authority<'a>(
 ) -> Result<'a, Uri<'a>> {
     let left = take_while(is_reg_name_char)?;
     switch! {
-        peek_slice(b":/") => Uri::Absolute(absolute(left)?),
+        peek_slice(&b":/"[..]) => Uri::Absolute(absolute(left)?),
         eat(b'@') => Uri::Authority(authority(Some(left))?),
-        colon@take_n_if(1, |b| b == b':') => {
+        colon@take_n_if(1, |&b| b == b':') => {
             // could be authority or an IP with ':' in it
-            let rest = take_while(|c| is_reg_name_char(c) || c == b':')?;
+            let rest = take_while(|c| is_reg_name_char(c) || *c == b':')?;
             switch! {
                 eat(b'@') => Uri::Authority(authority(Some(left + colon + rest))?),
                 peek(b'/') => {

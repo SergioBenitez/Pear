@@ -68,7 +68,7 @@ struct Info {
     name: &'static str,
     success: Option<bool>,
     start_context: Option<String>,
-    end_context: Option<String>,
+    end_context: Option<String>
 }
 
 impl Info {
@@ -107,12 +107,33 @@ fn debug_print(sibling_map: &mut Vec<bool>, node: Index) {
             None => ""
         };
 
+        #[cfg(feature = "color")]
+        let color = match info.success {
+            Some(true) => ::yansi::Color::Green,
+            Some(false) => ::yansi::Color::Red,
+            None => ::yansi::Color::Unset,
+        };
+
+        #[cfg(feature = "color")]
+        let dash = color.paint("-");
+
+        #[cfg(not(feature = "color"))]
+        let dash = "-";
+
         let ctxt = match (&info.start_context, &info.end_context) {
-            (&Some(ref a), &Some(ref b)) => format!(" [{}] - [{}]", a, b),
+            (&Some(ref a), &Some(ref b)) => format!(" [{}] {} [{}]", a, dash, b),
             _ => "".into()
         };
 
+        #[cfg(feature = "color")] {
+            println!("{}{}",
+                     color.paint(format!("{}{}", info.name, success)),
+                     ctxt);
+        }
+
+        #[cfg(not(feature = "color"))]
         println!("{}{}{}", info.name, success, ctxt);
+
         let children = tree.get_children(node);
         let num_children = children.len();
         for (i, &child) in children.iter().enumerate() {
@@ -125,17 +146,16 @@ fn debug_print(sibling_map: &mut Vec<bool>, node: Index) {
 }
 
 #[doc(hidden)]
-pub fn parser_entry(name: &'static str, ctxt: Option<String>) {
-    if is_debug!() {
+pub fn parser_entry(name: &'static str, ctxt: Option<String>, raw: bool) {
+    if (raw && is_pear_debug!("full")) || (!raw && is_pear_debug!()) {
         PARSE_TREE.with(|key| key.borrow_mut().push(Info::new(name, ctxt)));
     }
 }
 
 #[doc(hidden)]
-pub fn parser_exit(_: &'static str, success: bool, ctxt: Option<String>) {
-    if is_debug!() {
+pub fn parser_exit(_: &'static str, success: bool, ctxt: Option<String>, raw: bool) {
+    if (raw && is_pear_debug!("full")) || (!raw && is_pear_debug!()) {
         let done = PARSE_TREE.with(|key| {
-            // FIXME: Record whether it was successful or not.
             let mut tree = key.borrow_mut();
             let index = tree.pop_level();
             if let Some(last_node) = index {
@@ -149,6 +169,12 @@ pub fn parser_exit(_: &'static str, success: bool, ctxt: Option<String>) {
 
         // We've reached the end. Print the whole thing and clear the tree.
         if let Some(0) = done {
+            #[cfg(feature = "color")] {
+                if cfg!(windows) && !::yansi::Paint::enable_windows_ascii() {
+                    ::yansi::Paint::disable();
+                }
+            }
+
             debug_print(&mut vec![], 0);
             PARSE_TREE.with(|key| key.borrow_mut().clear());
         }

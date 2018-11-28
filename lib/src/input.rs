@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 
 pub trait Length {
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 impl Length for str {
@@ -46,19 +47,68 @@ impl Length for String {
     }
 }
 
+pub trait Token<I: Input> {
+    fn eq_token(&self, other: &I::Token) -> bool;
+    fn into_token(self) -> I::Token;
+}
+
+pub trait Slice<I: Input>: Length {
+    fn eq_slice(&self, other: &I::Slice) -> bool;
+    fn into_slice(self) -> I::Slice;
+}
+
+impl<I: Input> Token<I> for I::Token {
+    default fn eq_token(&self, other: &I::Token) -> bool { self == other }
+    default fn into_token(self) -> I::Token { self }
+}
+
+impl<I: Input> Slice<I> for I::Slice {
+    default fn eq_slice(&self, other: &I::Slice) -> bool { self == other }
+    default fn into_slice(self) -> I::Slice { self }
+}
+
 pub trait Input: Sized {
-    type Token: PartialEq + Copy;
-    type Slice: PartialEq + Clone + Length;
-    type InSlice: PartialEq + Clone + Length;
+    type Token: PartialEq;
+    type Slice: PartialEq + Length;
     type Many: Length;
     type Context: Display;
 
-    fn peek(&mut self) -> Option<Self::Token>;
-    fn peek_slice(&mut self, Self::InSlice) -> Option<Self::Slice>;
-    fn advance(&mut self, usize);
-    fn is_empty(&mut self) -> bool;
-    fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
-    fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> usize;
+    /// Returns a copy of the current token, if there is one.
+    fn token(&mut self) -> Option<Self::Token>;
+
+    /// Returns a copy of the current slice of size `n`, if there is one.
+    fn slice(&mut self, n: usize) -> Option<Self::Slice>;
+
+    /// Checks if the current token fulfills `cond`.
+    fn peek<F>(&mut self, cond: F) -> bool
+        where F: FnMut(&Self::Token) -> bool;
+
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`.
+    fn peek_slice<F>(&mut self, n: usize, cond: F) -> bool
+        where F: FnMut(&Self::Slice) -> bool;
+
+    /// Checks if the current token fulfills `cond`. If so, the token is
+    /// consumed and returned. Otherwise, returns `None`.
+    fn eat<F>(&mut self, cond: F) -> Option<Self::Token>
+        where F: FnMut(&Self::Token) -> bool;
+
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`. If so,
+    /// the slice is consumed and returned. Otherwise, returns `None`.
+    fn eat_slice<F>(&mut self, n: usize, cond: F) -> Option<Self::Slice>
+        where F: FnMut(&Self::Slice) -> bool;
+
+    /// Takes tokens while `cond` returns true, collecting them into a
+    /// `Self::Many` and returning it.
+    fn take<F>(&mut self, cond: F) -> Self::Many
+        where F: FnMut(&Self::Token) -> bool;
+
+    /// Skips tokens while `cond` returns true. Returns the number of skipped
+    /// tokens.
+    fn skip<F>(&mut self, cond: F) -> usize
+        where F: FnMut(&Self::Token) -> bool;
+
+    /// Returns `true` if there are no more tokens.
+    fn is_eof(&mut self) -> bool;
 
     #[inline(always)]
     fn context(&mut self) -> Option<Self::Context> {
@@ -66,62 +116,114 @@ pub trait Input: Sized {
     }
 }
 
+impl<'a, 'b: 'a> Slice<&'a str> for &'b str {
+    default fn eq_slice(&self, other: &&str) -> bool { self == other }
+    default fn into_slice(self) -> &'a str { self }
+}
+
 impl<'a> Input for &'a str {
     type Token = char;
-    type InSlice = &'a str;
     type Slice = &'a str;
     type Many = Self::Slice;
-    type Context = &'a str;
+    type Context = String;
 
-    #[inline(always)]
-    fn peek(&mut self) -> Option<Self::Token> {
+    /// Returns a copy of the current token, if there is one.
+    fn token(&mut self) -> Option<Self::Token> {
         self.chars().next()
     }
 
-    #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
-        if self.len() >= slice.len() {
-            let out_slice = &self[..slice.len()];
-            if out_slice == slice {
-                return Some(out_slice)
+    /// Returns a copy of the current slice of size `n`, if there is one.
+    fn slice(&mut self, n: usize) -> Option<Self::Slice> {
+        if self.len() < n {
+            None
+        } else {
+            Some(&self[..n])
+        }
+    }
+
+    /// Checks if the current token fulfills `cond`.
+    fn peek<F>(&mut self, mut cond: F) -> bool
+        where F: FnMut(&Self::Token) -> bool
+    {
+        self.token().map(|t| cond(&t)).unwrap_or(false)
+    }
+
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`.
+    fn peek_slice<F>(&mut self, n: usize, mut cond: F) -> bool
+        where F: FnMut(&Self::Slice) -> bool
+    {
+        self.slice(n).map(|s| cond(&s)).unwrap_or(false)
+    }
+
+    /// Checks if the current token fulfills `cond`. If so, the token is
+    /// consumed and returned. Otherwise, returns `None`.
+    fn eat<F>(&mut self, mut cond: F) -> Option<Self::Token>
+        where F: FnMut(&Self::Token) -> bool
+    {
+        if let Some(token) = self.token() {
+            if cond(&token) {
+                *self = &self[token.len_utf8()..];
+                return Some(token)
             }
         }
 
         None
     }
 
-    #[inline(always)]
-    fn skip_many<F>(&mut self, cond: F) -> usize
-        where F: FnMut(Self::Token) -> bool
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`. If so,
+    /// the slice is consumed and returned. Otherwise, returns `None`.
+    fn eat_slice<F>(&mut self, n: usize, mut cond: F) -> Option<Self::Slice>
+        where F: FnMut(&Self::Slice) -> bool
     {
-        self.take_many(cond).len()
-    }
-
-    #[inline]
-    fn take_many<F>(&mut self, mut cond: F) -> Self::Many
-        where F: FnMut(Self::Token) -> bool
-    {
-        for (i, c) in self.chars().enumerate() {
-            if !cond(c) {
-                let value = &self[..i];
-                self.advance(i);
-                return value;
+        if let Some(slice) = self.slice(n) {
+            if cond(&slice) {
+                *self = &self[slice.len()..];
+                return Some(slice)
             }
         }
 
-        let value = *self;
-        self.advance(self.len());
+        None
+    }
+
+    /// Takes tokens while `cond` returns true, collecting them into a
+    /// `Self::Many` and returning it.
+    fn take<F>(&mut self, mut cond: F) -> Self::Many
+        where F: FnMut(&Self::Token) -> bool
+    {
+        let mut consumed = 0;
+        for c in self.chars() {
+            if !cond(&c) { break; }
+            consumed += c.len_utf8();
+        }
+
+        let value = &self[..consumed];
+        *self = &self[consumed..];
         value
     }
 
-    #[inline(always)]
-    fn advance(&mut self, count: usize) {
-        *self = &self[count..];
+    /// Skips tokens while `cond` returns true. Returns the number of skipped
+    /// tokens.
+    fn skip<F>(&mut self, mut cond: F) -> usize
+        where F: FnMut(&Self::Token) -> bool
+    {
+        let mut skipped = 0;
+        match self.take(|c| {  skipped += 1; cond(c) }) {
+            "" => 0,
+            _ => skipped - 1
+        }
+    }
+
+    /// Returns `true` if there are no more tokens.
+    fn is_eof(&mut self) -> bool {
+        self.is_empty()
     }
 
     #[inline(always)]
-    fn is_empty(&mut self) -> bool {
-        str::is_empty(self)
+    fn context(&mut self) -> Option<Self::Context> {
+        match ::std::cmp::min(self.len(), 5) {
+            0 => None,
+            n => Some(format!("{:?}", &self[..n]))
+        }
     }
 }
 
@@ -138,7 +240,7 @@ impl<'a> Display for Position<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         const LIMIT: usize = 7;
 
-        if is_debug!() {
+        if is_pear_debug!() {
             write!(f, "{}:{}", self.line, self.column)?;
 
             if let Some(snippet) = self.snippet {
@@ -169,48 +271,80 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
+impl<'a, 'b: 'a> Slice<Text<'a>> for &'b str {
+    default fn eq_slice(&self, other: &&str) -> bool { self == other }
+    default fn into_slice(self) -> &'a str { self }
+}
+
 impl<'a> Input for Text<'a> {
     type Token = char;
-    type InSlice = &'a str;
     type Slice = &'a str;
     type Many = Self::Slice;
     type Context = Position<'a>;
 
-    #[inline(always)]
-    fn peek(&mut self) -> Option<Self::Token> {
-        self.current.peek()
+    /// Returns a copy of the current token, if there is one.
+    fn token(&mut self) -> Option<Self::Token> {
+        self.current.token()
     }
 
-    #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
-        self.current.peek_slice(slice)
+    /// Returns a copy of the current slice of size `n`, if there is one.
+    fn slice(&mut self, n: usize) -> Option<Self::Slice> {
+        self.current.slice(n)
     }
 
-    #[inline(always)]
-    fn skip_many<F>(&mut self, cond: F) -> usize
-        where F: FnMut(Self::Token) -> bool
+    /// Checks if the current token fulfills `cond`.
+    fn peek<F>(&mut self, cond: F) -> bool
+        where F: FnMut(&Self::Token) -> bool
     {
-        self.current.skip_many(cond)
+        self.current.peek(cond)
     }
 
-    #[inline(always)]
-    fn take_many<F>(&mut self, cond: F) -> Self::Many
-        where F: FnMut(Self::Token) -> bool
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`.
+    fn peek_slice<F>(&mut self, n: usize, cond: F) -> bool
+        where F: FnMut(&Self::Slice) -> bool
     {
-        self.current.take_many(cond)
+        self.current.peek_slice(n, cond)
+    }
+
+    /// Checks if the current token fulfills `cond`. If so, the token is
+    /// consumed and returned. Otherwise, returns `None`.
+    fn eat<F>(&mut self, cond: F) -> Option<Self::Token>
+        where F: FnMut(&Self::Token) -> bool
+    {
+        self.current.eat(cond)
+    }
+
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`. If so,
+    /// the slice is consumed and returned. Otherwise, returns `None`.
+    fn eat_slice<F>(&mut self, n: usize, cond: F) -> Option<Self::Slice>
+        where F: FnMut(&Self::Slice) -> bool
+    {
+        self.current.eat_slice(n, cond)
+    }
+
+    /// Takes tokens while `cond` returns true, collecting them into a
+    /// `Self::Many` and returning it.
+    fn take<F>(&mut self, cond: F) -> Self::Many
+        where F: FnMut(&Self::Token) -> bool
+    {
+        self.current.take(cond)
+    }
+
+    /// Skips tokens while `cond` returns true. Returns the number of skipped
+    /// tokens.
+    fn skip<F>(&mut self, cond: F) -> usize
+        where F: FnMut(&Self::Token) -> bool
+    {
+        self.current.skip(cond)
+    }
+
+    /// Returns `true` if there are no more tokens.
+    fn is_eof(&mut self) -> bool {
+        self.current.is_eof()
     }
 
     #[inline(always)]
-    fn advance(&mut self, count: usize) {
-        self.current.advance(count)
-    }
-
-    #[inline(always)]
-    fn is_empty(&mut self) -> bool {
-        self.current.is_empty()
-    }
-
-    fn context(&mut self) -> Option<Position<'a>> {
+    fn context(&mut self) -> Option<Self::Context> {
         let bytes_read = self.start.len() - self.current.len();
         let snippet = Some(&self.start[bytes_read..]);
         let pos = if bytes_read == 0 {
@@ -225,239 +359,291 @@ impl<'a> Input for Text<'a> {
     }
 }
 
-use std::fs::File;
-use std::io::{self, Read, BufReader};
+// // use std::fs::File;
+// // use std::io::{self, Read, BufReader};
 
-use std::cmp::min;
-use std::marker::PhantomData;
+// // use std::cmp::min;
+// // use std::marker::PhantomData;
 
-// Ideally, this would hold a `String` inside. But we need a lifetime parameter
-// here so we can return an &'a str from `peek_slice`. The alternative is to
-// give a lifetime to the `Input` trait and use it in the `peek_slice` method.
-// But that lifetime will pollute everything. Finally, the _correct_ thing is
-// for Rust to let us reference the lifetime of `self` in an associated type.
-// That requires something like https://github.com/rust-lang/rfcs/pull/1598.
-#[derive(Debug)]
-pub struct StringFile<'s> {
-    buffer: Vec<u8>,
-    consumed: usize,
-    pos: usize,
-    reader: BufReader<File>,
-    _string: PhantomData<&'s str>
-}
+// // // Ideally, this would hold a `String` inside. But we need a lifetime parameter
+// // // here so we can return an &'a str from `peek_slice`. The alternative is to
+// // // give a lifetime to the `Input` trait and use it in the `peek_slice` method.
+// // // But that lifetime will pollute everything. Finally, the _correct_ thing is
+// // // for Rust to let us reference the lifetime of `self` in an associated type.
+// // // That requires something like https://github.com/rust-lang/rfcs/pull/1598.
+// // #[derive(Debug)]
+// // pub struct StringFile<'s> {
+// //     buffer: Vec<u8>,
+// //     consumed: usize,
+// //     pos: usize,
+// //     reader: BufReader<File>,
+// //     _string: PhantomData<&'s str>
+// // }
 
-impl<'s> StringFile<'s> {
-    #[inline(always)]
-    pub fn open(path: &str) -> io::Result<StringFile<'s>> {
-        Ok(StringFile::new(File::open(path)?, 1024))
-    }
+// // impl<'s> StringFile<'s> {
+// //     #[inline(always)]
+// //     pub fn open(path: &str) -> io::Result<StringFile<'s>> {
+// //         Ok(StringFile::new(File::open(path)?, 1024))
+// //     }
 
-    #[inline(always)]
-    pub fn open_with_cap(path: &str, cap: usize) -> io::Result<StringFile<'s>> {
-        Ok(StringFile::new(File::open(path)?, cap))
-    }
+// //     #[inline(always)]
+// //     pub fn open_with_cap(path: &str, cap: usize) -> io::Result<StringFile<'s>> {
+// //         Ok(StringFile::new(File::open(path)?, cap))
+// //     }
 
-    #[inline(always)]
-    pub fn new(file: File, cap: usize) -> StringFile<'s> {
-        StringFile {
-            buffer: vec![0; cap],
-            consumed: 0,
-            pos: 0,
-            reader: BufReader::new(file),
-            _string: PhantomData
-        }
-    }
+// //     #[inline(always)]
+// //     pub fn new(file: File, cap: usize) -> StringFile<'s> {
+// //         StringFile {
+// //             buffer: vec![0; cap],
+// //             consumed: 0,
+// //             pos: 0,
+// //             reader: BufReader::new(file),
+// //             _string: PhantomData
+// //         }
+// //     }
 
-    #[inline(always)]
-    pub fn available(&self) -> usize {
-        self.pos - self.consumed
-    }
+// //     #[inline(always)]
+// //     pub fn available(&self) -> usize {
+// //         self.pos - self.consumed
+// //     }
 
-    fn read_into_peek(&mut self, num: usize) -> io::Result<usize> {
-        if self.available() >= num {
-            return Ok(num);
-        }
+// //     fn read_into_peek(&mut self, num: usize) -> io::Result<usize> {
+// //         if self.available() >= num {
+// //             return Ok(num);
+// //         }
 
-        let needed = num - self.available();
-        let to_read = min(self.buffer.len() - self.pos, needed);
-        let (i, j) = (self.pos, self.pos + to_read);
-        let read = self.reader.read(&mut self.buffer[i..j])?;
+// //         let needed = num - self.available();
+// //         let to_read = min(self.buffer.len() - self.pos, needed);
+// //         let (i, j) = (self.pos, self.pos + to_read);
+// //         let read = self.reader.read(&mut self.buffer[i..j])?;
 
-        self.pos += read;
-        Ok(self.available())
-    }
+// //         self.pos += read;
+// //         Ok(self.available())
+// //     }
 
-    // Panics if at least `num` aren't available.
-    #[inline(always)]
-    fn peek_bytes(&self, num: usize) -> &[u8] {
-        &self.buffer[self.consumed..(self.consumed + num)]
-    }
+// //     // Panics if at least `num` aren't available.
+// //     #[inline(always)]
+// //     fn peek_bytes(&self, num: usize) -> &[u8] {
+// //         &self.buffer[self.consumed..(self.consumed + num)]
+// //     }
 
-    fn consume(&mut self, num: usize) {
-        if self.pos < num {
-            let left = (num - self.pos) as u64;
-            self.consumed = 0;
-            self.pos = 0;
-            // TOOD: Probably don't ignore this?
-            let _ = io::copy(&mut self.reader.by_ref().take(left), &mut io::sink());
-        } else {
-            self.consumed += num;
-        }
-    }
+// //     fn consume(&mut self, num: usize) {
+// //         if self.pos < num {
+// //             let left = (num - self.pos) as u64;
+// //             self.consumed = 0;
+// //             self.pos = 0;
+// //             // TOOD: Probably don't ignore this?
+// //             let _ = io::copy(&mut self.reader.by_ref().take(left), &mut io::sink());
+// //         } else {
+// //             self.consumed += num;
+// //         }
+// //     }
 
-    #[inline]
-    fn peek_char(&mut self) -> Option<char> {
-        let available = match self.read_into_peek(4) {
-            Ok(n) => n,
-            Err(_) => return None
-        };
+// //     #[inline]
+// //     fn peek_char(&mut self) -> Option<char> {
+// //         let available = match self.read_into_peek(4) {
+// //             Ok(n) => n,
+// //             Err(_) => return None
+// //         };
 
-        let bytes = self.peek_bytes(available);
-        let string = match ::std::str::from_utf8(bytes) {
-            Ok(string) => string,
-            Err(e) => match ::std::str::from_utf8(&bytes[..e.valid_up_to()]) {
-                Ok(string) => string,
-                Err(_) => return None
-            }
-        };
+// //         let bytes = self.peek_bytes(available);
+// //         let string = match ::std::str::from_utf8(bytes) {
+// //             Ok(string) => string,
+// //             Err(e) => match ::std::str::from_utf8(&bytes[..e.valid_up_to()]) {
+// //                 Ok(string) => string,
+// //                 Err(_) => return None
+// //             }
+// //         };
 
-        string.chars().next()
-    }
-}
+// //         string.chars().next()
+// //     }
+// // }
 
-impl<'s> Input for StringFile<'s> {
-    type Token = char;
-    type InSlice = &'s str;
-    type Slice = &'s str;
-    type Many = String;
-    type Context = &'s str;
+// // impl<'s> Input for StringFile<'s> {
+// //     type Token = char;
+// //     type InSlice = &'s str;
+// //     type Slice = &'s str;
+// //     type Many = String;
+// //     type Context = &'s str;
 
-    // If we took Self::Token here, we'd know the length of the character.
-    #[inline(always)]
-    fn peek(&mut self) -> Option<Self::Token> {
-        self.peek_char()
-    }
+// //     // If we took Self::Token here, we'd know the length of the character.
+// //     #[inline(always)]
+// //     fn peek(&mut self) -> Option<Self::Token> {
+// //         self.peek_char()
+// //     }
 
-    fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, mut cond: F) -> Self::Many {
-        let mut result = String::new();
-        while let Some(c) = self.peek_char() {
-            if cond(c) {
-                result.push(c);
-                self.consume(c.len_utf8());
-            } else {
-                break;
-            }
-        }
+// //     fn take_many<F: FnMut(&Self::Token) -> bool>(&mut self, mut cond: F) -> Self::Many {
+// //         let mut result = String::new();
+// //         while let Some(c) = self.peek_char() {
+// //             if cond(&c) {
+// //                 result.push(c);
+// //                 self.consume(c.len_utf8());
+// //             } else {
+// //                 break;
+// //             }
+// //         }
 
-        result
-    }
+// //         result
+// //     }
 
-    fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, mut cond: F) -> usize {
-        let mut taken = 0;
-        while let Some(c) = self.peek_char() {
-            if cond(c) {
-                self.consume(c.len_utf8());
-                taken += 1;
-            } else {
-                return taken;
-            }
-        }
+// //     fn skip_many<F: FnMut(&Self::Token) -> bool>(&mut self, mut cond: F) -> usize {
+// //         let mut taken = 0;
+// //         while let Some(c) = self.peek_char() {
+// //             if cond(&c) {
+// //                 self.consume(c.len_utf8());
+// //                 taken += 1;
+// //             } else {
+// //                 return taken;
+// //             }
+// //         }
 
-        taken
-    }
+// //         taken
+// //     }
 
-    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
-        let available = match self.read_into_peek(slice.len()) {
-            Ok(n) => n,
-            Err(_) => return None
-        };
+// //     fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
+// //         let available = match self.read_into_peek(slice.len()) {
+// //             Ok(n) => n,
+// //             Err(_) => return None
+// //         };
 
-        let bytes = self.peek_bytes(available);
-        let string = match ::std::str::from_utf8(bytes) {
-            Ok(string) => string,
-            Err(e) => match ::std::str::from_utf8(&bytes[..e.valid_up_to()]) {
-                Ok(string) => string,
-                Err(_) => return None
-            }
-        };
+// //         let bytes = self.peek_bytes(available);
+// //         let string = match ::std::str::from_utf8(bytes) {
+// //             Ok(string) => string,
+// //             Err(e) => match ::std::str::from_utf8(&bytes[..e.valid_up_to()]) {
+// //                 Ok(string) => string,
+// //                 Err(_) => return None
+// //             }
+// //         };
 
-        match string == slice {
-            true => Some(slice),
-            false => None
-        }
-    }
+// //         match string == slice {
+// //             true => Some(slice),
+// //             false => None
+// //         }
+// //     }
 
-    #[inline(always)]
-    fn advance(&mut self, count: usize) {
-        self.consume(count);
-    }
+// //     #[inline(always)]
+// //     fn advance(&mut self, count: usize) {
+// //         self.consume(count);
+// //     }
 
-    #[inline(always)]
-    fn is_empty(&mut self) -> bool {
-        match self.read_into_peek(1) {
-            Ok(0) | Err(_) => true,
-            Ok(_) => false,
-        }
-    }
-}
+// //     #[inline(always)]
+// //     fn is_empty(&mut self) -> bool {
+// //         match self.read_into_peek(1) {
+// //             Ok(0) | Err(_) => true,
+// //             Ok(_) => false,
+// //         }
+// //     }
+// // }
 
 impl<'a> Input for &'a [u8] {
     type Token = u8;
-    type InSlice = &'a [u8];
     type Slice = &'a [u8];
     type Many = Self::Slice;
-    type Context = &'a str;
+    type Context = String;
 
-    #[inline(always)]
-    fn peek(&mut self) -> Option<Self::Token> {
-        match self.is_empty() {
-            true => None,
-            false => Some(self[0])
+    /// Returns a copy of the current token, if there is one.
+    fn token(&mut self) -> Option<Self::Token> {
+        self.get(0).map(|&c| c)
+    }
+
+    /// Returns a copy of the current slice of size `n`, if there is one.
+    fn slice(&mut self, n: usize) -> Option<Self::Slice> {
+        if self.len() < n {
+            None
+        } else {
+            Some(&self[..n])
         }
     }
 
-    #[inline(always)]
-    fn peek_slice(&mut self, slice: Self::InSlice) -> Option<Self::Slice> {
-        if self.len() >= slice.len() {
-            let out_slice = &self[..slice.len()];
-            if out_slice == slice {
-                return Some(out_slice)
+    /// Checks if the current token fulfills `cond`.
+    fn peek<F>(&mut self, mut cond: F) -> bool
+        where F: FnMut(&Self::Token) -> bool
+    {
+        self.token().map(|t| cond(&t)).unwrap_or(false)
+    }
+
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`.
+    fn peek_slice<F>(&mut self, n: usize, mut cond: F) -> bool
+        where F: FnMut(&Self::Slice) -> bool
+    {
+        self.slice(n).map(|s| cond(&s)).unwrap_or(false)
+    }
+
+    /// Checks if the current token fulfills `cond`. If so, the token is
+    /// consumed and returned. Otherwise, returns `None`.
+    fn eat<F>(&mut self, mut cond: F) -> Option<Self::Token>
+        where F: FnMut(&Self::Token) -> bool
+    {
+        if let Some(token) = self.token() {
+            if cond(&token) {
+                *self = &self[1..];
+                return Some(token)
             }
         }
 
         None
     }
 
-    #[inline(always)]
-    fn skip_many<F>(&mut self, cond: F) -> usize
-        where F: FnMut(Self::Token) -> bool
+    /// Checks if the current slice of size `n` (if any) fulfills `cond`. If so,
+    /// the slice is consumed and returned. Otherwise, returns `None`.
+    fn eat_slice<F>(&mut self, n: usize, mut cond: F) -> Option<Self::Slice>
+        where F: FnMut(&Self::Slice) -> bool
     {
-        self.take_many(cond).len()
-    }
-
-    fn take_many<F>(&mut self, mut cond: F) -> Self::Many
-        where F: FnMut(Self::Token) -> bool
-    {
-        for (i, c) in self.iter().enumerate() {
-            if !cond(*c) {
-                let value = &self[..i];
-                self.advance(i);
-                return value;
+        if let Some(slice) = self.slice(n) {
+            if cond(&slice) {
+                *self = &self[slice.len()..];
+                return Some(slice)
             }
         }
 
-        let value = *self;
-        self.advance(self.len());
+        None
+    }
+
+    /// Takes tokens while `cond` returns true, collecting them into a
+    /// `Self::Many` and returning it.
+    fn take<F>(&mut self, mut cond: F) -> Self::Many
+        where F: FnMut(&Self::Token) -> bool
+    {
+        let mut consumed = 0;
+        for c in self.iter() {
+            if !cond(c) { break; }
+            consumed += 1;
+        }
+
+        let value = &self[..consumed];
+        *self = &self[consumed..];
         value
     }
 
-    #[inline(always)]
-    fn advance(&mut self, count: usize) {
-        *self = &self[count..];
+    /// Skips tokens while `cond` returns true. Returns the number of skipped
+    /// tokens.
+    fn skip<F>(&mut self, mut cond: F) -> usize
+        where F: FnMut(&Self::Token) -> bool
+    {
+        let mut skipped = 0;
+        match self.take(|c| {  skipped += 1; cond(c) }) {
+            &[] => 0,
+            _ => skipped - 1
+        }
+    }
+
+    /// Returns `true` if there are no more tokens.
+    fn is_eof(&mut self) -> bool {
+        self.is_empty()
     }
 
     #[inline(always)]
-    fn is_empty(&mut self) -> bool {
-        self.len() == 0
+    fn context(&mut self) -> Option<Self::Context> {
+        let n = ::std::cmp::min(self.len(), 5);
+        if n == 0 {
+            return None;
+        }
+
+        let bytes = &self[..n];
+        if let Ok(string) = ::std::str::from_utf8(bytes) {
+            Some(format!("{:?}", string))
+        } else {
+            Some(format!("{:?}", bytes))
+        }
     }
 }

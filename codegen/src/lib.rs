@@ -74,6 +74,48 @@ fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
     }
 }
 
+fn wrapping_fn_block(function: &ItemFn, scope: TokenStream2, raw: bool) -> PResult<Block> {
+    let input_ident = extract_input_ident(&function)?;
+    let fn_block = &function.block;
+    let ret_ty = match &function.decl.output {
+        ReturnType::Default => quote!(()),
+        ReturnType::Type(_, ty) => quote!(#ty),
+    };
+
+    let result_map = if raw {
+        quote!((|| #fn_block)())
+    } else {
+        quote!((|| #scope::AsResult::as_result(#fn_block))())
+    };
+
+    let new_block_tokens = {
+        let name = &function.ident;
+        let name_str = name.to_string();
+        quote!({
+            #[allow(unused_imports)]
+            use #scope::{Input, Length};
+
+            if #scope::is_pear_debug!() {
+                let ctxt = #input_ident.context().map(|c| c.to_string());
+                #scope::parser_entry(#name_str, ctxt, #raw);
+            }
+
+            let result: #ret_ty = #result_map;
+
+            if #scope::is_pear_debug!() {
+                let success = result.is_ok();
+                let ctxt = #input_ident.context().map(|c| c.to_string());
+                #scope::parser_exit(#name_str, success, ctxt, #raw);
+            }
+
+            result
+        })
+    };
+
+    syn::parse(new_block_tokens.into())
+        .map_err(|e| function.span().error(format!("bad function: {}", e)).into())
+}
+
 // FIXME: Add the now missing `inline` optimization.
 fn parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
     let input: proc_macro2::TokenStream = input.into();
@@ -96,34 +138,7 @@ fn parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
     };
 
     visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
-
-    let new_block_tokens = {
-        let fn_block = &function.block;
-        let name = &function.ident;
-        let name_str = name.to_string();
-        quote!({
-            #[allow(unused_imports)]
-            use ::pear::{Input, Length};
-
-            if ::pear::is_debug!() {
-                let ctxt = #input_ident.context().map(|c| c.to_string());
-                ::pear::parser_entry(#name_str, ctxt);
-            }
-
-            let result = (|| ::pear::AsResult::as_result(#fn_block))();
-
-            if ::pear::is_debug!() {
-                let success = result.is_ok();
-                let ctxt = #input_ident.context().map(|c| c.to_string());
-                ::pear::parser_exit(#name_str, success, ctxt);
-            }
-
-            result
-        })
-    };
-
-    let new_block = syn::parse(new_block_tokens.into()).unwrap();
-    function.block = Box::new(new_block);
+    function.block = Box::new(wrapping_fn_block(&function, quote!(::pear), false)?);
 
     Ok(quote!(#function))
 }
@@ -138,6 +153,30 @@ pub fn parser(_args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
 }
+
+fn raw_parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
+    let input: proc_macro2::TokenStream = input.into();
+    let span = input.span();
+    let mut function: ItemFn = syn::parse2(input).map_err(|_| {
+        span.error("`raw_parser` attribute only supports functions")
+    })?;
+
+    function.block = Box::new(wrapping_fn_block(&function, quote!(crate), true)?);
+
+    Ok(quote!(#function))
+}
+
+#[proc_macro_attribute]
+pub fn raw_parser(_args: TokenStream, input: TokenStream) -> TokenStream {
+    match raw_parser_attribute(input) {
+        Ok(tokens) => tokens.into(),
+        Err(diag) => {
+            diag.emit();
+            TokenStream::new()
+        }
+    }
+}
+
 
 impl Case {
     fn to_tokens<'a, I>(input: &Expr, parser_name: &Ident, mut cases: I) -> TokenStream2

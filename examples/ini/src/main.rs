@@ -60,13 +60,13 @@ impl<'s> fmt::Display for IniConfig<'s> {
 }
 
 #[inline]
-fn is_whitespace(byte: char) -> bool {
+fn is_whitespace(&byte: &char) -> bool {
     byte == ' ' || byte == '\t' || byte == '\n'
 }
 
 
 #[inline]
-fn is_num_char(byte: char) -> bool {
+fn is_num_char(&byte: &char) -> bool {
     match byte { '0'...'9' | '.' => true, _ => false }
 }
 
@@ -74,7 +74,7 @@ pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
-    (eat(';')?, skip_while(|c| c != '\n')?);
+    (eat(';')?, skip_while(|c| *c != '\n')?);
 }
 
 #[parser]
@@ -89,18 +89,18 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<Value<'a>, I> {
         eat_slice("true") | eat_slice("yes") => Value::Boolean(true),
         eat_slice("false") | eat_slice("no") => Value::Boolean(false),
         peek_if(is_num_char) => Value::Number(float()?),
-        _ => Value::String(take_some_while(|c| !"\n;".contains(c))?.trim()),
+        _ => Value::String(take_some_while(|&c| !"\n;".contains(c))?.trim()),
     }
 }
 
 #[parser]
 fn heading<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
-    delimited('[', |c| !is_whitespace(c), ']')?
+    delimited_some('[', |c| !is_whitespace(c), ']')?
 }
 
 #[parser]
 fn name<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
-    take_some_while(|c| !"=\n;".contains(c))?.trim_right()
+    take_some_while(|&c| !"=\n;".contains(c))?.trim_right()
 }
 
 #[parser]
@@ -140,11 +140,14 @@ fn ini<'a, I: Input<'a>>(input: &mut I) -> Result<IniConfig<'a>, I> {
 }
 
 const INI_STRING: &str = "\
+; a section
 a=b
+; c is very special
+; and don't you know it
 c=1
 
 [section]
-a=b
+a=3
 c=1
 
 [section1]
@@ -157,12 +160,12 @@ a=1
 
 fn main() {
     // let start = time::precise_time_ns();
-    // let result = parse_ini(INI_STRING);
+    // let result = parse!(ini: &mut INI_STRING);
     let result = parse!(ini: &mut ::pear::Text::from(INI_STRING));
     // let end = time::precise_time_ns();
 
     match result {
-        Err(ref e) => println!("Error: {}", e),
+        Err(ref e) => println!("Error: {} on {}", e.expected, e.context.unwrap()),
         Ok(v) => println!("Got: {}", v)
     }
 

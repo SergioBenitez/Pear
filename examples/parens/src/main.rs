@@ -18,11 +18,11 @@ fn parens<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
 
 fn main() {
     let result = parse!(parens: &mut ::pear::Text::from("((((()))))"));
-    if let Err(e) = result { println!("Error: {}", e); }
+    if let Err(e) = result { println!("Error 0: {}", e); }
 
     let result = parse!(parens: &mut ::pear::Text::from("((())))"));
-    if let Err(e) = result { println!("Error: {}", e); }
+    if let Err(e) = result { println!("Error 1: {}", e); }
 
     let result = parse!(parens: &mut ::pear::Text::from("(((()))"));
-    if let Err(e) = result { println!("Error: {}", e); }
+    if let Err(e) = result { println!("Error 2: {}", e); }
 }

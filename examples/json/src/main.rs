@@ -19,12 +19,12 @@ pub enum JsonValue<'a> {
 }
 
 #[inline(always)]
-fn is_whitespace(c: char) -> bool {
+fn is_whitespace(&c: &char) -> bool {
     c == ' ' || c == '\n' || c == '\t' || c == '\r'
 }
 
 #[inline(always)]
-fn is_num(c: char) -> bool {
+fn is_num(&c: &char) -> bool {
     match c { '0'..='9' => true, _ => false }
 }
 
@@ -49,7 +49,7 @@ fn signed_int<'a, I: Input<'a>>(input: &mut I) -> Result<i64, I> {
 fn number<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
     let whole_num = signed_int()?;
     let frac = switch! { eat('.') => take_some_while(is_num)?, _ => "" };
-    let exp = switch! { eat_if(|c| "eE".contains(c)) => signed_int()?, _ => 0 };
+    let exp = switch! { eat_if(|&c| "eE".contains(c)) => signed_int()?, _ => 0 };
 
     // NOT BENCH
     format!("{}.{}e{}", whole_num, frac, exp).parse()
@@ -63,7 +63,7 @@ fn string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
     eat('"')?;
 
     let mut is_escaped = false;
-    let inner = take_while(|c| {
+    let inner = take_while(|&c| {
         if is_escaped { is_escaped = false; return true; }
         if c == '\\' { is_escaped = true; return true; }
         c != '"'
@@ -75,21 +75,16 @@ fn string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
 
 #[parser]
 fn object<'a, I: Input<'a>>(input: &mut I) -> Result<HashMap<&'a str, JsonValue<'a>>, I> {
-    let map: HashMap<_, _> = collection('{', |i| {
+    Ok(delimited_collect('{', |i| {
         let key = surrounded(i, string, is_whitespace)?;
         let value = (eat(i, ':')?, surrounded(i, value, is_whitespace)?).1;
         Ok((key, value))
-    }, ',', '}')?;
-
-    map
+    }, ',', '}')?)
 }
 
 #[parser]
 fn array<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<JsonValue<'a>>, I> {
-    collection::<Vec<_>, _, _, _>('[', value, ',', ']')? // NOT BENCH
-
-    // eat('[')?; loop { eat(',')?; value()?; } eat(']')?; // BENCH
-    // vec![] // BENCH
+    Ok(delimited_collect('[', value, ',', ']')?)
 }
 
 #[parser]
@@ -102,7 +97,7 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<JsonValue<'a>, I> {
         peek('{') => JsonValue::Object(object()?),
         peek('[') => JsonValue::Array(array()?),
         peek('"') => JsonValue::String(string()?),
-        peek_if(|c| c == '-' || is_num(c)) => JsonValue::Number(number()?),
+        peek_if(|c| *c == '-' || is_num(c)) => JsonValue::Number(number()?),
         token@peek_any() => return Err(pear_error!("unexpected input: {:?}", token)),
         _ => return Err(pear_error!("unknown input")),
     };

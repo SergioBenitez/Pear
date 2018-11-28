@@ -4,6 +4,7 @@
 
 use pear::{Result, parser, switch};
 use pear::parsers::*;
+use pear::combinators::*;
 
 #[derive(Debug)]
 struct MediaType<'s> {
@@ -13,7 +14,7 @@ struct MediaType<'s> {
 }
 
 #[inline]
-fn is_valid_token(c: char) -> bool {
+fn is_valid_token(&c: &char) -> bool {
     match c {
         '0'...'9' | 'a'...'z' | '^'...'~' | '#'...'\''
             | '!' | '*' | '+' | '-' | '.'  => true,
@@ -22,7 +23,7 @@ fn is_valid_token(c: char) -> bool {
 }
 
 #[inline(always)]
-fn is_whitespace(byte: char) -> bool {
+fn is_whitespace(&byte: &char) -> bool {
     byte == ' ' || byte == '\t'
 }
 
@@ -33,7 +34,7 @@ fn quoted_string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
     eat('"')?;
 
     let mut is_escaped = false;
-    let inner = take_while(|c| {
+    let inner = take_while(|&c| {
         if is_escaped { is_escaped = false; return true; }
         if c == '\\' { is_escaped = true; return true; }
         c != '"'
@@ -59,7 +60,10 @@ fn media_type<'a, I: Input<'a>>(input: &mut I) -> Result<MediaType<'a>, I> {
     MediaType {
         top: take_some_while_until(is_valid_token, '/')?,
         sub: (eat('/')?, take_some_while_until(is_valid_token, ';')?).1,
-        params: series(true, ';', is_whitespace, media_param)?
+        params: {
+            skip_while(is_whitespace)?;
+            prefixed_series(';', |i| surrounded(i, media_param, is_whitespace), ';')?
+        }
     }
 }
 
@@ -80,13 +84,15 @@ fn weighted_media_type<'a, I: Input<'a>>(input: &mut I) -> Result<(MediaType<'a>
 
 #[parser]
 fn accept<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<(MediaType<'a>, Option<f32>)>, I> {
-    Ok(series(false, ',', is_whitespace, weighted_media_type)?)
+    Ok(series(|i| surrounded(i, weighted_media_type, is_whitespace), ',')?)
 }
 
 fn main() {
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut ::pear::Text::from("a/b; a=\"abc\"; c=d")));
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=\"ab=\\\"c\\\"\"; c=d"));
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=b; c=d"));
-    println!("ACCEPT: {:?}", accept(&mut "a/b; a=b, c/d"));
-    println!("ACCEPT: {:?}", accept(&mut "a/b; q=0.7, c/d"));
+    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b"));
+    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b   ;    a=b  , c/d"));
+    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b, text/html"));
+    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b; q=0.7 ,  c/d"));
 }
