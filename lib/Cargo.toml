@@ -4,11 +4,12 @@ version = "0.2.0-dev"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A pear is a fruit."
 license = "MIT/Apache-2.0"
-
-[features]
-default = ["color"]
-color = ["yansi"]
+edition = "2018"
 
 [dependencies]
 yansi = { version = "0.4", optional = true }
 pear_codegen = { version = "0.2.0-dev", path = "../codegen" }
+
+[features]
+default = ["color"]
+color = ["yansi"]

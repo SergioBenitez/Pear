@@ -1,6 +1,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::input::ParserInfo;
+use crate::macros::is_parse_debug;
+
 type Index = usize;
 
 struct Tree<T> {
@@ -65,15 +68,14 @@ impl<T> Tree<T> {
 }
 
 struct Info {
-    name: &'static str,
+    parser: ParserInfo,
+    context: Option<String>,
     success: Option<bool>,
-    start_context: Option<String>,
-    end_context: Option<String>
 }
 
 impl Info {
-    fn new(name: &'static str, start_context: Option<String>) -> Info {
-        Info { name, start_context, success: None, end_context: None }
+    fn new(parser: ParserInfo) -> Info {
+        Info { parser, context: None, success: None }
     }
 }
 
@@ -114,25 +116,19 @@ fn debug_print(sibling_map: &mut Vec<bool>, node: Index) {
             None => ::yansi::Color::Unset,
         };
 
-        #[cfg(feature = "color")]
-        let dash = color.paint("-");
-
-        #[cfg(not(feature = "color"))]
-        let dash = "-";
-
-        let ctxt = match (&info.start_context, &info.end_context) {
-            (&Some(ref a), &Some(ref b)) => format!(" [{}] {} [{}]", a, dash, b),
-            _ => "".into()
+        let ctxt = match info.context {
+            Some(ref context) => context.to_string(),
+            _ => "".to_string()
         };
 
         #[cfg(feature = "color")] {
-            println!("{}{}",
-                     color.paint(format!("{}{}", info.name, success)),
+            println!("{} ({})",
+                     color.paint(format!("{}{}", info.parser.name, success)),
                      ctxt);
         }
 
         #[cfg(not(feature = "color"))]
-        println!("{}{}{}", info.name, success, ctxt);
+        println!("{}{} ({})", info.name, success, ctxt);
 
         let children = tree.get_children(node);
         let num_children = children.len();
@@ -146,22 +142,22 @@ fn debug_print(sibling_map: &mut Vec<bool>, node: Index) {
 }
 
 #[doc(hidden)]
-pub fn parser_entry(name: &'static str, ctxt: Option<String>, raw: bool) {
-    if (raw && is_pear_debug!("full")) || (!raw && is_pear_debug!()) {
-        PARSE_TREE.with(|key| key.borrow_mut().push(Info::new(name, ctxt)));
+pub fn parser_entry(parser: &ParserInfo) {
+    if (parser.raw && is_parse_debug!("full")) || (!parser.raw && is_parse_debug!()) {
+        PARSE_TREE.with(|key| key.borrow_mut().push(Info::new(*parser)));
     }
 }
 
 #[doc(hidden)]
-pub fn parser_exit(_: &'static str, success: bool, ctxt: Option<String>, raw: bool) {
-    if (raw && is_pear_debug!("full")) || (!raw && is_pear_debug!()) {
+pub fn parser_exit(parser: &ParserInfo, success: bool, ctxt: Option<String>) {
+    if (parser.raw && is_parse_debug!("full")) || (!parser.raw && is_parse_debug!()) {
         let done = PARSE_TREE.with(|key| {
             let mut tree = key.borrow_mut();
             let index = tree.pop_level();
             if let Some(last_node) = index {
                 let last = tree.get_mut(last_node);
                 last.success = Some(success);
-                last.end_context = ctxt;
+                last.context = ctxt;
             }
 
             index
@@ -180,3 +176,84 @@ pub fn parser_exit(_: &'static str, success: bool, ctxt: Option<String>, raw: bo
         }
     }
 }
+
+// FIXME: Remove the global state with a wrapping input like the one below.
+// Major caveat: the blanket Token impls in `input` prevent a blanket input
+// here.
+
+// pub struct Debug<I> {
+//     input: I,
+//     tree: Tree<Info>,
+// }
+
+// use crate::input::{Input, ParserInfo, Token};
+
+// impl<I: Input> Input for Debug<I> {
+//     type Token = I::Token;
+//     type Slice = I::Slice;
+//     type Many = I::Many;
+
+//     type Marker = I::Marker;
+//     type Context = I::Context;
+
+//     fn token(&mut self) -> Option<Self::Token> {
+//         self.input.token()
+//     }
+
+//     fn slice(&mut self, n: usize) -> Option<Self::Slice> {
+//         self.input.slice(n)
+//     }
+
+//     fn peek<F>(&mut self, cond: F) -> bool
+//         where F: FnMut(&Self::Token) -> bool
+//     {
+//         self.input.peek(cond)
+//     }
+
+//     fn peek_slice<F>(&mut self, n: usize, cond: F) -> bool
+//         where F: FnMut(&Self::Slice) -> bool
+//     {
+//         self.input.peek_slice(n, cond)
+//     }
+
+//     fn eat<F>(&mut self, cond: F) -> Option<Self::Token>
+//         where F: FnMut(&Self::Token) -> bool
+//     {
+//             self.input.eat(cond)
+//     }
+
+//     fn eat_slice<F>(&mut self, n: usize, cond: F) -> Option<Self::Slice>
+//         where F: FnMut(&Self::Slice) -> bool
+//     {
+//         self.input.eat_slice(n, cond)
+//     }
+
+//     fn take<F>(&mut self, cond: F) -> Self::Many
+//         where F: FnMut(&Self::Token) -> bool
+//     {
+//         self.input.take(cond)
+//     }
+
+//     fn skip<F>(&mut self, cond: F) -> usize
+//         where F: FnMut(&Self::Token) -> bool
+//     {
+//         self.input.skip(cond)
+//     }
+
+//     fn is_eof(&mut self) -> bool {
+//         self.input.is_eof()
+//     }
+
+//     fn mark(&mut self, info: &ParserInfo) -> Option<Self::Marker> {
+//         self.input.mark(info)
+//     }
+
+//     fn context(&mut self, mark: Option<&Self::Marker>) -> Option<Self::Context> {
+//         self.input.context(mark)
+//     }
+
+//     fn unmark(&mut self, info: &ParserInfo, success: bool, mark: Option<Self::Marker>) {
+//         self.input.unmark(info, success, mark)
+//     }
+// }
+

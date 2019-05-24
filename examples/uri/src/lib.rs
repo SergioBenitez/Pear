@@ -127,7 +127,7 @@ use self::tables::{is_reg_name_char, is_pchar};
 **/
 
 // type Input<'a> = IndexedInput<'a, [u8]>;
-// pear_declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
+// parse_declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
 
 // #[derive(Debug, PartialEq)]
 // pub enum Error<I: Input> {
@@ -450,7 +450,7 @@ type Result<'a, T> = ::pear::Result<T, RawInput<'a>>;
 #[parser]
 fn uri<'a>(input: &mut RawInput<'a>) -> Result<'a, Uri<'a>> {
     match input.len() {
-        0 => return Err(pear_error!("empty URI")),
+        0 => return Err(parse_error!("empty URI")),
         1 => switch! {
             eat(b'*') => Uri::Asterisk,
             eat(b'/') => Uri::origin("/", None),
@@ -475,10 +475,10 @@ fn origin<'a>(input: &mut RawInput<'a>) -> Result<'a, Origin<'a>> {
 #[parser]
 fn path_and_query<'a>(input: &mut RawInput<'a>) -> Result<'a, Origin<'a>> {
     let path = take_while(is_pchar)?;
-    let query = pear_try!(eat(b'?') => take_while(is_pchar)?);
+    let query = parse_try!(eat(b'?') => take_while(is_pchar)?);
 
     if path.is_empty() && query.is_none() {
-        Err(pear_error!("expected path or query, found neither"))
+        Err(parse_error!("expected path or query, found neither"))
     } else {
         // We know the string is ASCII because of the `is_pchar` checks above.
         Ok(unsafe { Origin::raw(input.cow_source(), path, query) })
@@ -497,7 +497,7 @@ fn port<'a>(input: &mut RawInput<'a>) -> Result<'a, u16> {
     }
 
     if port_num > u16::max_value() as u32 {
-        return Err(pear_error!("port value out of range: {}", port_num));
+        return Err(parse_error!("port value out of range: {}", port_num));
     }
 
     port_num as u16
@@ -514,7 +514,7 @@ fn authority<'a>(
     };
 
     // The `is_pchar`,`is_reg_name_char`, and `port()` functions ensure ASCII.
-    let port = pear_try!(eat(b':') => port()?);
+    let port = parse_try!(eat(b':') => port()?);
     unsafe { Authority::raw(input.cow_source(), user_info, host, port) }
 }
 
@@ -535,11 +535,11 @@ fn absolute<'a>(
                 }
             };
 
-            let path_and_query = pear_try!(path_and_query());
+            let path_and_query = parse_try!(path_and_query());
             (Some(authority), path_and_query)
         },
         eat(b':') => (None, Some(path_and_query()?)),
-        _ => return Err(pear_error!("something"))
+        _ => return Err(parse_error!("something"))
     };
 
     // `authority` and `path_and_query` parsers ensure ASCII.
@@ -565,7 +565,7 @@ fn absolute_or_authority<'a>(
                 },
                 _ => unsafe {
                     // `left` and `rest` are reg_name, `query` is pchar.
-                    let query = pear_try!(eat(b'?') => take_while(is_pchar)?);
+                    let query = parse_try!(eat(b'?') => take_while(is_pchar)?);
                     Uri::raw_absolute(input.cow_source(), left, rest, query)
                 }
             }

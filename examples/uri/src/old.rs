@@ -128,7 +128,7 @@ use self::tables::{is_reg_name_char, is_pchar};
 **/
 
 // type Input<'a> = IndexedInput<'a, [u8]>;
-pear_declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
+parse_declare!(Input<'a>(Token = u8, Slice = &'a [u8], Many = &'a [u8]));
 
 // #[derive(Debug, PartialEq)]
 // pub enum Error<I: Input> {
@@ -409,7 +409,7 @@ type Result<'a, T> = ::pear::Result<T, RawInput<'a>>;
 #[parser]
 fn uri<'a>(input: &mut RawInput<'a>) -> Result<'a, Uri<'a>> {
     match input.len() {
-        0 => return Err(pear_error!("empty URI")),
+        0 => return Err(parse_error!("empty URI")),
         1 => switch! {
             eat(b'*') => Uri::Asterisk,
             eat(b'/') => Uri::origin("/", None),
@@ -440,7 +440,7 @@ fn path_and_query<'a>(input: &mut RawInput<'a>) -> Result<'a, Origin<'a>> {
     };
 
     if path.is_empty() && query.is_none() {
-        Err(pear_error!("expected path or query, found neither"))
+        Err(parse_error!("expected path or query, found neither"))
     } else {
         // We know the string is ASCII because of the `is_pchar` checks above.
         Ok(unsafe { Origin::raw(input.cow_source(), path, query) })
@@ -514,7 +514,7 @@ fn absolute<'a>(
             (Some(authority), path_and_query)
         },
         eat(b':') => (None, Some(path_and_query()?)),
-        _ => return Err(pear_error!("Something"))
+        _ => return Err(parse_error!("Something"))
     };
 
     // `authority` and `path_and_query` parsers ensure ASCII.

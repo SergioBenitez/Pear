@@ -3,10 +3,11 @@ members = [
   "lib/",
   "codegen/",
   "examples/ini",
+  "examples/group",
   # "examples/http",
-  "examples/media_type",
+  # "examples/media_type",
   # "examples/exprs",
   "examples/parens",
   "examples/json",
-  "examples/uri",
+  # "examples/uri",
 ]

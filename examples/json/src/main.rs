@@ -1,12 +1,12 @@
 #![feature(proc_macro_hygiene)]
-
-#[macro_use] extern crate pear;
+#![warn(rust_2018_idioms)]
 
 use std::collections::HashMap;
 
-use pear::{Result, parser, switch};
-use pear::parsers::*;
+use pear::result::Result;
+use pear::macros::{parser, switch, parse_declare, parse, parse_error};
 use pear::combinators::*;
+use pear::parsers::*;
 
 #[derive(Debug, PartialEq)]
 pub enum JsonValue<'a> {
@@ -28,12 +28,11 @@ fn is_num(&c: &char) -> bool {
     match c { '0'..='9' => true, _ => false }
 }
 
-pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn int<'a, I: Input<'a>>(input: &mut I) -> Result<i64, I> {
-    take_some_while(is_num)?.parse()
-        .map_err(|e| pear_error!("{}", e))// NOT BENCH
+    take_some_while(is_num)?.parse().or_else(|e| parse_error!("{}", e))
     // take_some_while(|c| ('0'..='9').contains(c)); // BENCH
     // 1 // BENCH
 }
@@ -53,7 +52,7 @@ fn number<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
 
     // NOT BENCH
     format!("{}.{}e{}", whole_num, frac, exp).parse()
-        .map_err(|e| pear_error!("{}", e))
+        .or_else(|e| parse_error!("{}", e))
 
     // 0.0 // BENCH
 }
@@ -98,8 +97,8 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<JsonValue<'a>, I> {
         peek('[') => JsonValue::Array(array()?),
         peek('"') => JsonValue::String(string()?),
         peek_if(|c| *c == '-' || is_num(c)) => JsonValue::Number(number()?),
-        token@peek_any() => return Err(pear_error!("unexpected input: {:?}", token)),
-        _ => return Err(pear_error!("unknown input")),
+        token@peek_any() => return parse_error!("unexpected input: {:?}", token),
+        _ => return parse_error!("unknown input"),
     };
 
     skip_while(is_whitespace)?;
@@ -119,12 +118,12 @@ fn main() {
                 "Width":  100e10
             },
             "Animated" : false,
-            "IDs": [116, 943, 234, 38793]
+            "IDs": [116, 943, 234, 38793
         },
         "escaped characters": "\u2192\uD83D\uDE00\"\t\uD834\uDD1E"
     }"#;
 
-    let result = parse!(value: &mut ::pear::Text::from(test));
+    let result = parse!(value: &mut pear::input::Text::from(test));
     if let Err(ref e) = result {
         println!("Error: {}", e);
     }

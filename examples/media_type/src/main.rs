@@ -1,8 +1,8 @@
 #![feature(proc_macro_hygiene)]
 
-#[macro_use] extern crate pear;
+use pear::result::Result;
+use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
-use pear::{Result, parser, switch};
 use pear::parsers::*;
 use pear::combinators::*;
 
@@ -16,7 +16,7 @@ struct MediaType<'s> {
 #[inline]
 fn is_valid_token(&c: &char) -> bool {
     match c {
-        '0'...'9' | 'a'...'z' | '^'...'~' | '#'...'\''
+        '0'..='9' | 'a'..='z' | '^'..='~' | '#'..='\''
             | '!' | '*' | '+' | '-' | '.'  => true,
         _ => false
     }
@@ -27,7 +27,7 @@ fn is_whitespace(&byte: &char) -> bool {
     byte == ' ' || byte == '\t'
 }
 
-pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn quoted_string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
@@ -72,9 +72,9 @@ fn weighted_media_type<'a, I: Input<'a>>(input: &mut I) -> Result<(MediaType<'a>
     let media_type = media_type()?;
     let weight = match media_type.params.iter().next() {
         Some(&("q", value)) => match value.parse::<f32>().ok() {
-            Some(q) if q > 1.0 => return Err(pear_error!("media-type weight >= 1.0")),
+            Some(q) if q > 1.0 => return Err(parse_error!("media-type weight >= 1.0")),
             Some(q) => Some(q),
-            None => return Err(pear_error!("invalid media-type weight"))
+            None => return Err(parse_error!("invalid media-type weight"))
         },
         _ => None
     };
@@ -88,7 +88,9 @@ fn accept<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<(MediaType<'a>, Option<
 }
 
 fn main() {
-    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut ::pear::Text::from("a/b; a=\"abc\"; c=d")));
+    use pear::input::Text;
+
+    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut Text::from("a/b; a=\"abc\"; c=d")));
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=\"ab=\\\"c\\\"\"; c=d"));
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=b; c=d"));
     println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b"));

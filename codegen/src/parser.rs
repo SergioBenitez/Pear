@@ -1,60 +1,16 @@
-use proc_macro::Span;
-
-use syn::Token;
-use syn::punctuated::Punctuated;
+use syn::{punctuated::Punctuated, Token};
 use syn::parse::{Parse as SynParse, ParseStream as SynParseStream};
-use proc_macro2::Delimiter;
-use spanned::Spanned;
+use proc_macro2::{Span, Delimiter};
 
-#[derive(Debug)]
-crate struct Diagnostic(crate ::proc_macro::Diagnostic);
+use crate::diagnostics::{Diagnostic, SpanExt, Spanned};
 
-impl Diagnostic {
-    pub fn emit(self) {
-        self.0.emit();
-    }
-}
+pub type PResult<T> = Result<T, Diagnostic>;
 
-impl From<::proc_macro::Diagnostic> for Diagnostic {
-    fn from(original: ::proc_macro::Diagnostic) -> Diagnostic {
-        Diagnostic(original)
-    }
-}
-
-impl From<::syn::parse::Error> for Diagnostic {
-    fn from(e: ::syn::parse::Error) -> Diagnostic {
-        let inner = ::proc_macro::Diagnostic::spanned(
-            e.span().unstable(), ::proc_macro::Level::Error, e.to_string());
-        Diagnostic(inner)
-    }
-}
-
-impl Into<::syn::parse::Error> for Diagnostic {
-    fn into(self) -> ::syn::parse::Error {
-        let span = if self.0.spans().is_empty() {
-            Span::call_site()
-        } else {
-            self.0.spans()[0]
-        };
-
-        ::syn::parse::Error::new(span.into(), self.0.message())
-    }
-}
-
-impl ::std::ops::Deref for Diagnostic {
-    type Target = ::proc_macro::Diagnostic;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-crate type PResult<T> = Result<T, Diagnostic>;
-
-crate trait Parse: Sized {
+pub trait Parse: Sized {
     fn parse(input: syn::parse::ParseStream) -> PResult<Self>;
 
     fn syn_parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        // FIXME: This tosses away every error but the first.
         Self::parse(input).map_err(|e| e.into())
     }
 }
@@ -92,9 +48,10 @@ impl<'a> ParseStreamExt for SynParseStream<'a> {
 }
 
 #[derive(Debug)]
-crate struct CallPattern {
-    crate name: Option<syn::Ident>,
-    crate expr: syn::ExprCall,
+pub struct CallPattern {
+    pub name: Option<syn::Ident>,
+    pub at: Option<Token![@]>,
+    pub expr: syn::ExprCall,
 }
 
 impl syn::parse::Parse for CallPattern {
@@ -103,33 +60,34 @@ impl syn::parse::Parse for CallPattern {
     }
 }
 
-impl Spanned for CallPattern {
-    fn span(&self) -> Span {
+impl quote::ToTokens for CallPattern {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let (expr, at) = (&self.expr, &self.at);
         match self.name {
-            Some(ref name) => name.span().unstable().join(self.expr.span()).unwrap(),
-            None => self.expr.span()
+            Some(ref name) => quote!(#name #at #expr).to_tokens(tokens),
+            None => expr.to_tokens(tokens)
         }
     }
 }
 
 #[derive(Debug)]
-crate enum Pattern {
+pub enum Pattern {
     Wild(Token![_]),
     Calls(Punctuated<CallPattern, Token![|]>)
 }
 
 #[derive(Debug)]
-crate struct Case {
-    crate pattern: Pattern,
-    crate expr: syn::Expr,
-    crate span: Span,
+pub struct Case {
+    pub pattern: Pattern,
+    pub expr: syn::Expr,
+    pub span: Span,
 }
 
 #[derive(Debug)]
-crate struct Switch {
-    crate parser_name: syn::Ident,
-    crate input: syn::Expr,
-    crate cases: Punctuated<Case, Token![,]>
+pub struct Switch {
+    pub parser_name: syn::Ident,
+    pub input: syn::Expr,
+    pub cases: Punctuated<Case, Token![,]>
 }
 
 // FIXME(syn): Something like this should be in `syn`
@@ -150,39 +108,41 @@ fn parse_expr_call(input: SynParseStream) -> syn::parse::Result<syn::ExprCall> {
 
 impl Parse for CallPattern {
     fn parse(input: SynParseStream) -> PResult<Self> {
-        let name = input.try_parse(|input| {
+        let name_at = input.try_parse(|input| {
             let ident: syn::Ident = input.parse()?;
-            input.parse::<Token![@]>()?;
-            Ok(ident)
+            let at = input.parse::<Token![@]>()?;
+            Ok((ident, at))
         }).ok();
 
-        Ok(CallPattern { name, expr: parse_expr_call(input)? })
+        let (name, at) = match name_at {
+            Some((name, at)) => (Some(name), Some(at)),
+            None => (None, None)
+        };
+
+        Ok(CallPattern { name, at, expr: parse_expr_call(input)? })
     }
 }
 
 impl Pattern {
     fn validate(&self) -> PResult<()> {
-        let mut prev = None;
         if let Pattern::Calls(ref calls) = self {
+            let first_name = calls.first().and_then(|call| call.value().name.clone());
             for call in calls.iter() {
-                if prev.is_none() { prev = Some(call.name.clone()); }
-
-                let prev_name = prev.as_ref().unwrap();
-                if prev_name != &call.name {
+                if first_name != call.name {
                     let mut err = if let Some(ref ident) = call.name {
-                        ident.span().unstable()
+                        ident.span()
                             .error("captured name differs from declaration")
                     } else {
                         call.expr.span()
                             .error("expected capture name due to previous declaration")
                     };
 
-                    err = match prev_name {
-                        Some(p) => err.span_note(p.span().unstable(), "declared here"),
+                    err = match first_name {
+                        Some(p) => err.span_note(p.span(), "declared here"),
                         None => err
                     };
 
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
         }
@@ -193,7 +153,7 @@ impl Pattern {
 
 impl Parse for Case {
     fn parse(input: SynParseStream) -> PResult<Self> {
-        let case_span_start = input.cursor().span().unstable();
+        let case_span_start = input.cursor().span();
 
         let pattern = if let Ok(wild) = input.parse::<Token![_]>() {
             Pattern::Wild(wild)
@@ -207,7 +167,7 @@ impl Parse for Case {
         pattern.validate()?;
         input.parse::<Token![=>]>()?;
         let expr: syn::Expr = input.parse()?;
-        let span = case_span_start.join(input.cursor().span().unstable()).unwrap();
+        let span = case_span_start.join(input.cursor().span()).unwrap();
 
         Ok(Case { pattern, expr, span })
     }

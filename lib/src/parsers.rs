@@ -1,4 +1,7 @@
-use {Result, Input, Token, Slice, Expected, ParseErr};
+use crate::result::Result;
+use crate::error::{ParseError, Expected};
+use crate::input::{Input, Length, Token, Slice};
+use crate::macros::parser;
 
 // // TODO:
 // // * provide basic parsers in pear
@@ -7,131 +10,125 @@ use {Result, Input, Token, Slice, Expected, ParseErr};
 // //   - escaped string, with some way to configure escapes
 
 #[inline(always)]
-fn error<T, I: Input>(
-    input: &mut I,
-    parser: &'static str,
-    expected: Expected<I>
-) -> Result<T, I> {
-    Err(ParseErr { parser, expected, context: input.context() })
-}
-
-#[inline(always)]
 fn expected_token<T, A, I>(
     input: &mut I,
-    parser: &'static str,
     token: Option<T>
 ) -> Result<A, I>
     where T: Token<I>, I: Input
 {
-    Err(ParseErr {
-        parser,
-        expected: Expected::Token(token.map(|t| t.into_token()), input.token()),
-        context: input.context()
-    })
+    let expected = Expected::Token(token.map(|t| t.into_token()), input.token());
+    Err(ParseError::expected(expected))
 }
 
 #[inline(always)]
 fn expected_slice<S, A, I>(
     input: &mut I,
-    parser: &'static str,
     slice: S
 ) -> Result<A, I>
     where S: Slice<I>, I: Input
 {
     let len = slice.len();
-    Err(ParseErr {
-        parser,
-        expected: Expected::Slice(Some(slice.into_slice()), input.slice(len)),
-        context: input.context()
-    })
+    let expected = Expected::Slice(Some(slice.into_slice()), input.slice(len));
+    Err(ParseError::expected(expected))
 }
 
 /// Eats the current token if it is `token`.
-#[raw_parser]
+#[parser(raw)]
 pub fn eat<I, T>(input: &mut I, token: T) -> Result<I::Token, I>
     where I: Input, T: Token<I>
 {
     match input.eat(|t| token.eq_token(t)) {
         Some(token) => Ok(token),
-        None => expected_token(input, "eat", Some(token))
+        None => expected_token(input, Some(token))
     }
 }
 
 /// Eats the token `token` if `cond` holds on the current token.
-#[raw_parser]
+#[parser(raw)]
 pub fn eat_if<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     match input.eat(cond) {
         Some(token) => Ok(token),
-        None => expected_token::<I::Token, _, _>(input, "eat_if", None)
+        None => expected_token::<I::Token, _, _>(input, None)
     }
 }
 
 /// Eats the current token unconditionally.
-#[raw_parser]
+#[parser(raw)]
 pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.eat(|_| true) {
         Some(token) => Ok(token),
-        None => error(input, "eat_any", Expected::Token(None, None)),
+        None => Err(ParseError::expected(Expected::Token(None, None)))
     }
 }
 
 /// Eats the current slice if it is `slice`.
-#[raw_parser]
+#[parser(raw)]
 pub fn eat_slice<I, S>(input: &mut I, slice: S) -> Result<I::Slice, I>
     where I: Input, S: Slice<I>
 {
     match input.eat_slice(slice.len(), |s| slice.eq_slice(s)) {
         Some(slice) => Ok(slice),
-        None => expected_slice(input, "eat_slice", slice)
+        None => expected_slice(input, slice)
     }
 }
 
 /// Succeeds if the current token is `token`.
-#[raw_parser]
+#[parser(raw)]
 pub fn peek<I, T>(input: &mut I, token: T) -> Result<(), I>
     where I: Input, T: Token<I>
 {
     match input.peek(|t| token.eq_token(t)) {
         true => Ok(()),
-        false => expected_token(input, "peek", Some(token))
+        false => expected_token(input, Some(token))
     }
 }
 
 /// Succeeds if `cond` holds for the current token.
-#[raw_parser]
+#[parser(raw)]
+pub fn peek_if_copy<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
+    where I: Input, F: FnMut(&I::Token) -> bool
+{
+    match input.peek(cond) {
+        true => Ok(input.token().unwrap()),
+        false => expected_token::<I::Token, _, _>(input, None)
+    }
+}
+
+/// Succeeds if `cond` holds for the current token.
+#[parser(raw)]
 pub fn peek_if<I, F>(input: &mut I, cond: F) -> Result<(), I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     match input.peek(cond) {
         true => Ok(()),
-        false => expected_token::<I::Token, _, _>(input, "peek_if", None)
+        false => expected_token::<I::Token, _, _>(input, None)
     }
 }
 
 /// Succeeds if the current slice is `slice`.
-#[raw_parser]
+#[parser(raw)]
 pub fn peek_slice<I, S>(input: &mut I, slice: S) -> Result<(), I>
     where I: Input, S: Slice<I>
 {
     match input.peek_slice(slice.len(), |s| slice.eq_slice(s)) {
         true => Ok(()),
-        false => expected_slice(input, "peek_slice", slice)
+        false => expected_slice(input, slice)
     }
 }
 
 /// Returns the current token.
-#[raw_parser]
+#[parser(raw)]
 pub fn peek_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.token() {
         Some(peeked) => Ok(peeked),
-        None => error(input, "peek_any", Expected::Token(None, None)),
+        None => Err(ParseError::expected(Expected::Token(None, None)))
     }
 }
 
 /// Skips tokens while `cond` matches.
-#[raw_parser]
+#[parser(raw)]
 pub fn skip_while<I, F>(input: &mut I, cond: F) -> Result<usize, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
@@ -140,7 +137,7 @@ pub fn skip_while<I, F>(input: &mut I, cond: F) -> Result<usize, I>
 
 /// Consumes tokens while `cond` matches and returns them. Succeeds even if no
 /// tokens match.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
@@ -149,13 +146,13 @@ pub fn take_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
 
 /// Consumes tokens while `cond` matches and returns them. Succeeds only if at
 /// least one token matched `cond`.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_some_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     let value = input.take(cond);
     if value.len() == 0 {
-        return error(input, "take_some_while", Expected::Token(None, None));
+        return Err(ParseError::expected(Expected::Token(None, None)));
     }
 
     Ok(value)
@@ -163,7 +160,7 @@ pub fn take_some_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
 
 /// Consumes tokens while `cond` matches and the token is not `until`. Succeeds
 /// even if no tokens match.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_while_until<I, T, F>(
     input: &mut I,
     mut cond: F,
@@ -178,7 +175,7 @@ pub fn take_while_until<I, T, F>(
 
 /// Consumes tokens while `cond` matches and the token is not `until`. Succeeds
 /// only if at least one token matched `cond`.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_some_while_until<I, T, F>(
     input: &mut I,
     mut cond: F,
@@ -192,14 +189,14 @@ pub fn take_some_while_until<I, T, F>(
 }
 
 /// Takes at most `n` tokens.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_n<I: Input>(input: &mut I, n: usize) -> Result<I::Many, I> {
     let mut i = 0;
     Ok(input.take(|_| { let c = i < n; i += 1; c }))
 }
 
 /// Takes at most `n` tokens as long as `cond` holds.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_n_while<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
@@ -208,14 +205,14 @@ pub fn take_n_while<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Man
 }
 
 /// Take exactly `n` tokens, ensuring `cond` holds on all `n`.
-#[raw_parser]
+#[parser(raw)]
 pub fn take_n_if<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     let mut i = 0;
     let v = input.take(|c| { cond(c) && { let ok = i < n; i += 1; ok } });
     if v.len() != n {
-        return error(input, "take_n_if", Expected::Token(None, None));
+        return Err(ParseError::expected(Expected::Token(None, None)));
     }
 
     Ok(v)
@@ -224,7 +221,7 @@ pub fn take_n_if<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, 
 /// Parse a token stream that starts with `start` and ends with `end`, returning
 /// all of the tokens in between. The tokens in between must match `cond`.
 /// Succeeds even if there are no tokens between `start` and `end`.
-#[raw_parser]
+#[parser(raw)]
 pub fn delimited<I, T, F>(
     input: &mut I,
     start: T,
@@ -244,7 +241,7 @@ pub fn delimited<I, T, F>(
 /// Parse a token stream that starts with `start` and ends with `end`, returning
 /// all of the tokens in between. The tokens in between must match `cond`. There
 /// must be at least one token between `start` and `end`.
-#[raw_parser]
+#[parser(raw)]
 pub fn delimited_some<I, T, F>(
     input: &mut I,
     start: T,
@@ -262,18 +259,18 @@ pub fn delimited_some<I, T, F>(
 }
 
 /// Succeeds only if the input has reached EOF.
-#[raw_parser]
+#[parser(raw)]
 pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
     if input.is_eof() {
         Ok(())
     } else {
         let next = input.token();
-        error(input, "eof", Expected::Eof(next))
+        Err(ParseError::expected(Expected::Eof(next)))
     }
 }
 
 // // Like delimited, but keeps the start and end tokens.
-// #[raw_parser]
+// #[parser(raw)]
 // pub fn enclosed<I: Input, F>(
 //     input: &mut I,
 //     start: I::Token,

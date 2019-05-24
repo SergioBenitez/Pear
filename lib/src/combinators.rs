@@ -1,8 +1,9 @@
 use std::hash::Hash;
 use std::collections::{HashMap, BTreeMap};
 
-use {Result, Input, Token};
-use parsers::*;
+use crate::{result::Result, input::{Input, Token}};
+use crate::macros::parser;
+use crate::parsers::*;
 
 pub trait Collection {
     type Item;
@@ -49,9 +50,9 @@ impl<K: Ord, V> Collection for BTreeMap<K, V> {
 }
 
 /// Parses `p` until `p` fails, returning the last successful `p`.
-#[raw_parser]
-pub fn last_of_many<I, O, P>(input: &mut I, p: P) -> Result<O, I>
-    where I: Input, P: Fn(&mut I) -> Result<O, I>
+#[parser(raw)]
+pub fn last_of_many<I, O, P>(input: &mut I, mut p: P) -> Result<O, I>
+    where I: Input, P: FnMut(&mut I) -> Result<O, I>
 {
     loop {
         let output = p(input)?;
@@ -62,7 +63,7 @@ pub fn last_of_many<I, O, P>(input: &mut I, p: P) -> Result<O, I>
 }
 
 /// Skips all tokens that match `f` before and after a `p`, returning `p`.
-#[raw_parser]
+#[parser(raw)]
 pub fn surrounded<I, O, F, P>(input: &mut I, mut p: P, mut f: F) -> Result<O, I>
     where I: Input,
           F: FnMut(&I::Token) -> bool,
@@ -76,7 +77,7 @@ pub fn surrounded<I, O, F, P>(input: &mut I, mut p: P, mut f: F) -> Result<O, I>
 
 /// Parses as many `p` as possible until EOF is reached, collecting them into a
 /// `C`. `C` may be empty.
-#[raw_parser]
+#[parser(raw)]
 pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
     where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
 {
@@ -92,7 +93,7 @@ pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
 
 /// Parses as many `p` as possible until EOF is reached, collecting them into a
 /// `C`. `C` is not allowed to be empty.
-#[raw_parser]
+#[parser(raw)]
 pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
     where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
 {
@@ -109,7 +110,7 @@ pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
 /// start with `start` and end with `end`. `item` Gramatically, this is:
 ///
 /// START (item SEPERATOR)* END
-#[raw_parser]
+#[parser(raw)]
 pub fn delimited_collect<C, I, T, S, O, P>(
     input: &mut I,
     start: T,
@@ -147,8 +148,8 @@ pub fn delimited_collect<C, I, T, S, O, P>(
 
 /// Parses many `separator` delimited `p`s. Gramatically, this is:
 ///
-/// (item SEPERATOR)+
-#[raw_parser]
+/// item (SEPERATOR item)*
+#[parser(raw)]
 pub fn series<C, I, S, O, P>(
     input: &mut I,
     mut item: P,
@@ -170,11 +171,48 @@ pub fn series<C, I, S, O, P>(
     Ok(collection)
 }
 
+/// Parses many `separator` delimited `p`s with an optional trailing separator.
+/// Gramatically, this is:
+///
+/// item (SEPERATOR item)* SEPERATOR?
+#[parser(raw)]
+pub fn trailing_series<C, I, S, O, P>(
+    input: &mut I,
+    mut item: P,
+    seperator: S,
+) -> Result<C, I>
+    where C: Collection<Item=O>,
+          I: Input,
+          S: Token<I> + Clone,
+          P: FnMut(&mut I) -> Result<O, I>,
+{
+    let mut collection = C::new();
+    let mut have_some = false;
+    loop {
+        match item(input) {
+            Ok(item) => collection.add(item),
+            Err(e) => if have_some {
+                break
+            } else {
+                return Err(e)
+            }
+        }
+
+        if eat(input, seperator.clone()).is_err() {
+            break;
+        }
+
+        have_some = true;
+    }
+
+    Ok(collection)
+}
+
 /// Parses many `separator` delimited `p`s that are collectively prefixed with
 /// `prefix`. Gramatically, this is:
 ///
 /// PREFIX (item SEPERATOR)*
-#[raw_parser]
+#[parser(raw)]
 pub fn prefixed_series<C, I, T, O, P>(
     input: &mut I,
     prefix: T,

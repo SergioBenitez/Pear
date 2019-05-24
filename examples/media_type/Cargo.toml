@@ -2,6 +2,7 @@
 name = "media_type"
 version = "0.0.0"
 workspace = "../../"
+edition = "2018"
 
 [dependencies]
 pear = { path = "../../lib" }

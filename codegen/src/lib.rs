@@ -1,22 +1,27 @@
-#![feature(crate_visibility_modifier)]
-#![feature(proc_macro_diagnostic, proc_macro_span)]
 #![recursion_limit="256"]
+
+#![cfg_attr(parse_nightly, feature(proc_macro_diagnostic, proc_macro_span))]
 
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate syn;
 #[macro_use] extern crate quote;
 
-mod spanned;
 mod parser;
+mod diagnostics;
 
-use parser::*;
-use spanned::Spanned;
-
-use syn::*;
-use proc_macro2::TokenStream as TokenStream2;
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use syn::visit_mut::{self, VisitMut};
+
+use crate::diagnostics::{Diagnostic, Spanned, SpanExt};
+use crate::parser::*;
+
+fn parse_mark_ident(span: proc_macro2::Span) -> syn::Ident {
+    const PARSE_MARK_IDENT: &'static str = "____parse_parse_mark";
+
+    syn::Ident::new(PARSE_MARK_IDENT, span)
+}
 
 #[derive(Copy, Clone)]
 enum State {
@@ -25,20 +30,20 @@ enum State {
 }
 
 struct ParserTransformer {
-    input: Expr,
-    name: Ident,
+    input: syn::Expr,
+    name: syn::Ident,
     state: State,
 }
 
 impl VisitMut for ParserTransformer {
-    fn visit_expr_try_mut(&mut self, v: &mut ExprTry) {
+    fn visit_expr_try_mut(&mut self, v: &mut syn::ExprTry) {
         let last_state = self.state;
         self.state = State::InTry;
         visit_mut::visit_expr_try_mut(self, v);
         self.state = last_state;
     }
 
-    fn visit_expr_call_mut(&mut self, call: &mut ExprCall) {
+    fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
         if let State::InTry = self.state {
             // TODO: Should we keep recursing?
             call.args.insert(0, self.input.clone());
@@ -47,67 +52,85 @@ impl VisitMut for ParserTransformer {
         }
     }
 
-    fn visit_macro_mut(&mut self, m: &mut Macro) {
+    fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
         if let Some(ref segment) = m.path.segments.last() {
             let name = segment.value().ident.to_string();
-            if name == "switch" || name.starts_with("pear_") {
-                let new_stream = {
-                    let (input, name, tokens) = (&self.input, &self.name, &m.tts);
-                    quote!([#name; #input] #tokens)
-                };
-
-                m.tts = new_stream.into();
-            }
+            let (input, parser_name) = (&self.input, &self.name);
+            m.tts = if name == "parse_mark" || name == "parse_context" {
+                let mark = parse_mark_ident(self.input.span());
+                quote!([#parser_name; #input] #mark)
+            } else if name == "switch" || name.starts_with("parse_") {
+                let tokens = &m.tts;
+                quote!([#parser_name; #input] #tokens)
+            } else {
+                return
+            };
         }
     }
 }
 
-fn extract_input_ident(f: &ItemFn) -> PResult<Ident> {
+fn extract_input_ident(f: &syn::ItemFn) -> PResult<syn::Ident> {
+    use syn::{FnArg::Captured, ArgCaptured, Pat::Ident};
+
     let first = f.decl.inputs.first().ok_or_else(|| {
-        let paren_span = f.decl.paren_token.span.unstable();
+        let paren_span = f.decl.paren_token.span;
         paren_span.error("parsing functions require at least one input")
     })?;
 
     match first.value() {
-        FnArg::Captured(ArgCaptured { pat: Pat::Ident(pat), .. }) => Ok(pat.ident.clone()),
-        _ => Err(first.span().error("invalid type for parser input").into())
+        Captured(ArgCaptured { pat: Ident(pat), .. }) => Ok(pat.ident.clone()),
+        _ => Err(first.span().error("invalid type for parser input"))
     }
 }
 
-fn wrapping_fn_block(function: &ItemFn, scope: TokenStream2, raw: bool) -> PResult<Block> {
+fn wrapping_fn_block(
+    function: &syn::ItemFn,
+    scope: TokenStream2,
+    raw: bool,
+) -> PResult<syn::Block> {
     let input_ident = extract_input_ident(&function)?;
     let fn_block = &function.block;
     let ret_ty = match &function.decl.output {
-        ReturnType::Default => quote!(()),
-        ReturnType::Type(_, ty) => quote!(#ty),
+        syn::ReturnType::Default => quote!(()),
+        syn::ReturnType::Type(_, ty) => quote!(#ty),
     };
 
+    let mark_ident = parse_mark_ident(input_ident.span());
     let result_map = if raw {
-        quote!((|| #fn_block)())
+        quote!((|#mark_ident| #fn_block))
     } else {
-        quote!((|| #scope::AsResult::as_result(#fn_block))())
+        quote!((|#mark_ident| #scope::result::AsResult::as_result(#fn_block)))
     };
 
     let new_block_tokens = {
         let name = &function.ident;
         let name_str = name.to_string();
         quote!({
-            #[allow(unused_imports)]
-            use #scope::{Input, Length};
+            let info = #scope::input::ParserInfo {
+                name: #name_str,
+                raw: #raw,
+            };
 
-            if #scope::is_pear_debug!() {
-                let ctxt = #input_ident.context().map(|c| c.to_string());
-                #scope::parser_entry(#name_str, ctxt, #raw);
+            // FIXME: Get rid of this!
+            if #scope::macros::is_parse_debug!() {
+                #scope::debug::parser_entry(&info);
             }
 
-            let result: #ret_ty = #result_map;
-
-            if #scope::is_pear_debug!() {
-                let success = result.is_ok();
-                let ctxt = #input_ident.context().map(|c| c.to_string());
-                #scope::parser_exit(#name_str, success, ctxt, #raw);
+            let marker = #scope::input::Input::mark(#input_ident, &info);
+            let mut result: #ret_ty = #result_map(marker.as_ref());
+            if let Err(ref mut error) = result {
+                let ctxt = #scope::input::Input::context(#input_ident, marker.as_ref());
+                error.push_context(ctxt, info);
             }
 
+            // FIXME: Get rid of this!
+            if #scope::macros::is_parse_debug!() {
+                let ctxt = #scope::input::Input::context(#input_ident, marker.as_ref());
+                let string = ctxt.map(|c| c.to_string());
+                #scope::debug::parser_exit(&info, result.is_ok(), string);
+            }
+
+            #scope::input::Input::unmark(#input_ident, &info, result.is_ok(), marker);
             result
         })
     };
@@ -117,69 +140,58 @@ fn wrapping_fn_block(function: &ItemFn, scope: TokenStream2, raw: bool) -> PResu
 }
 
 // FIXME: Add the now missing `inline` optimization.
-fn parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
+fn parser_attribute(input: TokenStream, is_raw: bool) -> PResult<TokenStream2> {
     let input: proc_macro2::TokenStream = input.into();
     let span = input.span();
-    let mut function: ItemFn = syn::parse2(input).map_err(|_| {
+    let mut function: syn::ItemFn = syn::parse2(input).map_err(|_| {
         span.error("`parser` attribute only supports functions")
     })?;
 
-    let input_ident = extract_input_ident(&function)?;
-    let input_expr = Expr::Path(ExprPath {
-        attrs: vec![],
-        qself: None,
-        path: input_ident.clone().into()
-    });
+    if !is_raw {
+        let input_ident = extract_input_ident(&function)?;
+        let input_expr = syn::Expr::Path(syn::ExprPath {
+            attrs: vec![],
+            qself: None,
+            path: input_ident.clone().into()
+        });
 
-    let mut transformer = ParserTransformer {
-        input: input_expr,
-        name: function.ident.clone(),
-        state: State::Start
+        let mut transformer = ParserTransformer {
+            input: input_expr,
+            name: function.ident.clone(),
+            state: State::Start
+        };
+
+        visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
+    }
+
+    let scope = match is_raw { true => quote!(crate), false => quote!(::pear) };
+    function.block = Box::new(wrapping_fn_block(&function, scope, is_raw)?);
+
+    Ok(quote!(#function))
+}
+
+#[proc_macro_attribute]
+pub fn parser(args: TokenStream, input: TokenStream) -> TokenStream {
+    let args: proc_macro2::TokenStream = args.into();
+    let args_span = args.span();
+    let is_raw = match syn::parse2::<syn::Ident>(args).ok() {
+        Some(ref ident) if ident == "raw" => true,
+        Some(_) => return args_span.error("unsupported arguments").emit_as_tokens(),
+        None => false,
     };
 
-    visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
-    function.block = Box::new(wrapping_fn_block(&function, quote!(::pear), false)?);
-
-    Ok(quote!(#function))
-}
-
-#[proc_macro_attribute]
-pub fn parser(_args: TokenStream, input: TokenStream) -> TokenStream {
-    match parser_attribute(input) {
+    match parser_attribute(input, is_raw) {
         Ok(tokens) => tokens.into(),
-        Err(diag) => {
-            diag.emit();
-            TokenStream::new()
-        }
+        Err(diag) => diag.emit_as_tokens(),
     }
 }
-
-fn raw_parser_attribute(input: TokenStream) -> PResult<TokenStream2> {
-    let input: proc_macro2::TokenStream = input.into();
-    let span = input.span();
-    let mut function: ItemFn = syn::parse2(input).map_err(|_| {
-        span.error("`raw_parser` attribute only supports functions")
-    })?;
-
-    function.block = Box::new(wrapping_fn_block(&function, quote!(crate), true)?);
-
-    Ok(quote!(#function))
-}
-
-#[proc_macro_attribute]
-pub fn raw_parser(_args: TokenStream, input: TokenStream) -> TokenStream {
-    match raw_parser_attribute(input) {
-        Ok(tokens) => tokens.into(),
-        Err(diag) => {
-            diag.emit();
-            TokenStream::new()
-        }
-    }
-}
-
 
 impl Case {
-    fn to_tokens<'a, I>(input: &Expr, parser_name: &Ident, mut cases: I) -> TokenStream2
+    fn to_tokens<'a, I>(
+        input: &syn::Expr,
+        parser_name: &syn::Ident,
+        mut cases: I
+    ) -> TokenStream2
         where I: Iterator<Item = &'a Case>
     {
         let this = match cases.next() {
@@ -209,7 +221,7 @@ impl Case {
                 let name = calls.iter().map(|call| {
                     call.name.as_ref()
                         .map(|c| c.clone())
-                        .unwrap_or(Ident::new("_", call.span().into()))
+                        .unwrap_or(syn::Ident::new("_", call.span()))
                 });
 
                 // FIXME: We're repeating ourselves, aren't we? We alrady do
@@ -250,9 +262,6 @@ pub fn switch(input: TokenStream) -> TokenStream {
     use syn::parse::Parser;
     match Switch::syn_parse.parse(input) {
         Ok(switch) => switch.to_tokens().into(),
-        Err(e) => {
-            Diagnostic::emit(e.into());
-            TokenStream::new()
-        }
+        Err(e) => Diagnostic::from(e).emit_as_tokens(),
     }
 }

@@ -1,13 +1,11 @@
 #![feature(proc_macro_hygiene)]
-
-#[macro_use] extern crate pear;
+#![warn(rust_2018_idioms)]
 
 use std::fmt;
-use pear::Result;
-use pear::parsers::*;
 
-use pear::parser;
-use pear::switch;
+use pear::parsers::*;
+use pear::{result::Result, input::Text};
+use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
 #[derive(Debug, PartialEq)]
 enum Value<'s> {
@@ -33,8 +31,8 @@ struct IniConfig<'s> {
     sections: Vec<Section<'s>>
 }
 
-impl<'s> fmt::Display for Value<'s> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for Value<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Number(n) => write!(f, "{}", n),
@@ -43,8 +41,8 @@ impl<'s> fmt::Display for Value<'s> {
     }
 }
 
-impl<'s> fmt::Display for IniConfig<'s> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl fmt::Display for IniConfig<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for section in self.sections.iter() {
             if let Some(name) = section.name {
                 write!(f, "[({})]\n", name)?;
@@ -67,10 +65,10 @@ fn is_whitespace(&byte: &char) -> bool {
 
 #[inline]
 fn is_num_char(&byte: &char) -> bool {
-    match byte { '0'...'9' | '.' => true, _ => false }
+    match byte { '0'..='9' | '.' => true, _ => false }
 }
 
-pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
@@ -79,8 +77,7 @@ fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
 
 #[parser]
 fn float<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
-    take_some_while(is_num_char)?.parse()
-        .map_err(|e| pear_error!("{}", e))
+    take_some_while(is_num_char)?.parse().or_else(|e| parse_error!("{}", e))
 }
 
 #[parser]
@@ -100,7 +97,7 @@ fn heading<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
 
 #[parser]
 fn name<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
-    take_some_while(|&c| !"=\n;".contains(c))?.trim_right()
+    take_some_while(|&c| !"=\n;".contains(c))?.trim_end()
 }
 
 #[parser]
@@ -144,32 +141,33 @@ const INI_STRING: &str = "\
 a=b
 ; c is very special
 ; and don't you know it
-c=1
+c=2.0
 
 [section]
 a=3
 c=1
 
 [section1]
-a=1 ; comment
+a=2 ; comment
 b=c
 
 [section2]
 a=1
+
+[section10
 ";
 
 fn main() {
     // let start = time::precise_time_ns();
     // let result = parse!(ini: &mut INI_STRING);
-    let result = parse!(ini: &mut ::pear::Text::from(INI_STRING));
+    let result = parse!(ini: &mut Text::from(INI_STRING));
     // let end = time::precise_time_ns();
 
     match result {
-        Err(ref e) => println!("Error: {} on {}", e.expected, e.context.unwrap()),
+        Err(ref e) => println!("Error: {}", e),
         Ok(v) => println!("Got: {}", v)
     }
 
-    // // TODO: Make sure we can use the same parser for files and strings.
-   // sman
- // println!("Result (in {}us): {:?}", (end - start) / 1000, result);
+    // TODO: Make sure we can use the same parser for files and strings.
+    // println!("Result (in {}us): {:?}", (end - start) / 1000, result);
 }

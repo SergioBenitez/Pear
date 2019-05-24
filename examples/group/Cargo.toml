@@ -1,9 +1,8 @@
 [package]
-name = "json"
+name = "group"
 version = "0.0.0"
 workspace = "../../"
 edition = "2018"
 
 [dependencies]
 pear = { path = "../../lib" }
-pear_codegen = { path = "../../codegen" }

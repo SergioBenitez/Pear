@@ -4,15 +4,15 @@ version = "0.2.0-dev"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A (codegen) pear is a fruit."
 license = "MIT/Apache-2.0"
+edition = "2018"
 
 [lib]
 proc-macro = true
 
 [dependencies]
 quote = "0.6"
-proc-macro2 = { version = "0.4", features = ["nightly"] }
+proc-macro2 = { version = "0.4" }
 syn = { version = "0.15", features = ["full", "extra-traits", "visit-mut"] }
 
 [build-dependencies]
-yansi = "0.5"
-version_check = "0.9"
+version_check = "0.9.1"
