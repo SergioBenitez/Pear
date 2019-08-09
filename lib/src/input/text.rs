@@ -150,6 +150,6 @@ fn line_col(string: &str) -> (usize, usize) {
     }
 
     let (line_count, last_line) = string.lines().enumerate().last().unwrap();
-    (line_count + 1, last_line.len())
+    (line_count + 1, last_line.len() + 1)
 }
 

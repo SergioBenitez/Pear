@@ -118,18 +118,16 @@ fn main() {
                 "Width":  100e10
             },
             "Animated" : false,
-            "IDs": [116, 943, 234, 38793
+            "IDs": [116, 943, 234, 38793)
         },
         "escaped characters": "\u2192\uD83D\uDE00\"\t\uD834\uDD1E"
     }"#;
 
     let result = parse!(value: &mut pear::input::Text::from(test));
-    if let Err(ref e) = result {
-        println!("Error: {}", e);
+    match result {
+        Ok(v) => println!("Value: {:#?}", v),
+        Err(e) => println!("Error: {}", e)
     }
-
-    // TODO: Make sure we can use the same parser for files and strings.
-    println!("Result: {:#?}", result);
 }
 
 
