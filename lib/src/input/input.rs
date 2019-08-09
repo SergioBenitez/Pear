@@ -29,8 +29,8 @@ pub struct ParserInfo {
 }
 
 pub trait Input: Sized {
-    type Token: PartialEq;
-    type Slice: PartialEq + Length;
+    type Token: PartialEq + Token<Self>;
+    type Slice: PartialEq + Length + Slice<Self>;
     type Many: Length;
 
     type Marker;
