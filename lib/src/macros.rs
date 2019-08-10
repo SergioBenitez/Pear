@@ -93,9 +93,9 @@
 //!     Invoked with no arguments: `parse_context!()`. Returns the current
 //!     context given the current mark.
 //!
-//!   * [`parse_mark!`](#parse_mark)
+//!   * [`parse_marker!`](#parse_marker)
 //!
-//!     Invoked with no arguments: `parse_mark!()`. Returns the current mark.
+//!     Invoked with no arguments: `parse_marker!()`. Returns the current mark.
 //!
 //!   * [`switch!`](#switch)
 //!
@@ -125,7 +125,7 @@
 
 #[doc(hidden)] pub use pear_codegen::{parser, switch};
 #[doc(hidden)] pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
-#[doc(hidden)] pub use crate::{parse_mark, parse_context};
+#[doc(hidden)] pub use crate::{parse_marker, parse_context};
 
 #[doc(hidden)]
 #[macro_export]
@@ -170,7 +170,7 @@ macro_rules! parse_error {
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! parse_mark {
+macro_rules! parse_marker {
     ([$name:ident; $i:expr] $mark:expr) => ($mark);
 }
 

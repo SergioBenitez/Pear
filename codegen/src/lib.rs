@@ -17,10 +17,10 @@ use syn::visit_mut::{self, VisitMut};
 use crate::diagnostics::{Diagnostic, Spanned, SpanExt};
 use crate::parser::*;
 
-fn parse_mark_ident(span: proc_macro2::Span) -> syn::Ident {
-    const PARSE_MARK_IDENT: &'static str = "____parse_parse_mark";
+fn parse_marker_ident(span: proc_macro2::Span) -> syn::Ident {
+    const PARSE_MARKER_IDENT: &'static str = "____parse_parse_marker";
 
-    syn::Ident::new(PARSE_MARK_IDENT, span)
+    syn::Ident::new(PARSE_MARKER_IDENT, span)
 }
 
 #[derive(Copy, Clone)]
@@ -56,8 +56,8 @@ impl VisitMut for ParserTransformer {
         if let Some(ref segment) = m.path.segments.last() {
             let name = segment.value().ident.to_string();
             let (input, parser_name) = (&self.input, &self.name);
-            m.tts = if name == "parse_mark" || name == "parse_context" {
-                let mark = parse_mark_ident(self.input.span());
+            m.tts = if name == "parse_marker" || name == "parse_context" {
+                let mark = parse_marker_ident(self.input.span());
                 quote!([#parser_name; #input] #mark)
             } else if name == "switch" || name.starts_with("parse_") {
                 let tokens = &m.tts;
@@ -95,7 +95,7 @@ fn wrapping_fn_block(
         syn::ReturnType::Type(_, ty) => quote!(#ty),
     };
 
-    let mark_ident = parse_mark_ident(input_ident.span());
+    let mark_ident = parse_marker_ident(input_ident.span());
     let result_map = if raw {
         quote!((|#mark_ident| #fn_block))
     } else {
