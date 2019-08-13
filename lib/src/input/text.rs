@@ -47,6 +47,16 @@ impl<'a, 'b: 'a> Slice<Text<'a>> for &'b str {
     default fn into_slice(self) -> &'a str { self }
 }
 
+impl Text<'_> {
+    /// Rewind the input `n` bytes. If `n` is greater than the number of bytes
+    /// that have been consumed, rewinds to the beginning of the input.
+    pub fn rewind(&mut self, n: usize) {
+        let consumed = self.start.len() - self.current.len();
+        let to_rewind = std::cmp::min(consumed, n);
+        self.current = &self.start[(consumed - to_rewind)..];
+    }
+}
+
 impl<'a> Input for Text<'a> {
     type Token = char;
     type Slice = &'a str;
@@ -152,4 +162,3 @@ fn line_col(string: &str) -> (usize, usize) {
     let (line_count, last_line) = string.lines().enumerate().last().unwrap();
     (line_count + 1, last_line.len() + 1)
 }
-
