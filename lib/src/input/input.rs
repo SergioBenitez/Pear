@@ -33,7 +33,7 @@ pub trait Input: Sized {
     type Slice: PartialEq + Length + Slice<Self>;
     type Many: Length;
 
-    type Marker;
+    type Marker: Copy;
     type Context: Display;
 
     /// Returns a copy of the current token, if there is one.

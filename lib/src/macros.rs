@@ -75,7 +75,7 @@
 //!
 //!   * [`parse!`](#parse)
 //!
-//!     Runs the parser with the given name and input. After the parser returns,
+//!     Runs the parser with the given ame and input. After the parser returns,
 //!     runs the [`eof()`] parser. Returns the combined result.
 //!
 //!     Syntax:
@@ -125,7 +125,7 @@
 
 #[doc(hidden)] pub use pear_codegen::{parser, switch};
 #[doc(hidden)] pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
-#[doc(hidden)] pub use crate::{parse_marker, parse_context};
+#[doc(hidden)] pub use crate::{parse_marker, parse_mark, parse_context};
 
 #[doc(hidden)]
 #[macro_export]
@@ -162,8 +162,10 @@ macro_rules! _parse_declare {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_error {
-    ([$name:ident; $i:expr] $err:expr) => (parse_error!([$name; $i] $err,));
-    ([$name:ident; $i:expr] $fmt:expr, $($arg:tt)*) => {
+    ([$n:expr; $i:expr; $m:expr] $err:expr) => {
+        parse_error!([$n; $i; $m] $err,)
+    };
+    ([$n:expr; $i:expr; $m:expr] $fmt:expr, $($arg:tt)*) => {
         Err($crate::error::ParseError::custom(format!($fmt, $($arg)*)))
     };
 }
@@ -171,13 +173,21 @@ macro_rules! parse_error {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_marker {
-    ([$name:ident; $i:expr] $mark:expr) => ($mark);
+    ([$n:expr; $i:expr; $mark:expr]) => ($mark.as_ref());
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! parse_mark {
+    ([$info:expr; $input:expr; $marker:expr]) => {{
+        *$marker = $crate::input::Input::mark($input, $info);
+    }}
 }
 
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_context {
-    ([$name:ident; $i:expr] $mark:expr) => ($crate::input::Input::context($i, $mark));
+    ([$n:expr; $i:expr; $mark:expr]) => ($crate::input::Input::context($i, $mark.as_ref()));
 }
 
 /// FIXME: This is an issue with rustc here where if `$input` is `expr`
@@ -185,14 +195,14 @@ macro_rules! parse_context {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_try {
-    ([$name:ident; $input:ident] $e:expr) => {{
-        $crate::macros::switch! { [$name;$input] result@$e => { Some(result) }, _ => { None } }
+    ([$n:expr; $input:ident; $m:expr] $e:expr) => {{
+        $crate::macros::switch! { [$n;$input;$m] result@$e => { Some(result) }, _ => { None } }
     }};
-    ([$name:ident; $input:ident] $e:expr => $r:expr) => {{
-        $crate::macros::switch! { [$name;$input] $e => { Some($r) }, _ => { None } }
+    ([$n:expr; $input:ident; $m:expr] $e:expr => $r:expr) => {{
+        $crate::macros::switch! { [$n;$input;$m] $e => { Some($r) }, _ => { None } }
     }};
-    ([$name:ident; $input:ident] $pat:ident@$e:expr => $r:expr) => {{
-        $crate::macros::switch! { [$name;$input] $pat@$e => { Some($r) }, _ => { None } }
+    ([$n:expr; $input:ident; $m:expr] $pat:ident@$e:expr => $r:expr) => {{
+        $crate::macros::switch! { [$n;$input;$m] $pat@$e => { Some($r) }, _ => { None } }
     }}
 }
 

@@ -19,8 +19,12 @@ use crate::parser::*;
 
 fn parse_marker_ident(span: proc_macro2::Span) -> syn::Ident {
     const PARSE_MARKER_IDENT: &'static str = "____parse_parse_marker";
-
     syn::Ident::new(PARSE_MARKER_IDENT, span)
+}
+
+fn parser_info_ident(span: proc_macro2::Span) -> syn::Ident {
+    const PARSE_INFO_IDENT: &'static str = "____parse_parser_info";
+    syn::Ident::new(PARSE_INFO_IDENT, span)
 }
 
 #[derive(Copy, Clone)]
@@ -31,8 +35,13 @@ enum State {
 
 struct ParserTransformer {
     input: syn::Expr,
-    name: syn::Ident,
     state: State,
+}
+
+impl From<syn::Expr> for ParserTransformer {
+    fn from(input: syn::Expr) -> ParserTransformer {
+        ParserTransformer { input, state: State::Start }
+    }
 }
 
 impl VisitMut for ParserTransformer {
@@ -53,18 +62,18 @@ impl VisitMut for ParserTransformer {
     }
 
     fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
+        // FIXME: Replace _inside_ the token stream as well so something like
+        // println!("context = {:?}", parse_context!()) works.
         if let Some(ref segment) = m.path.segments.last() {
             let name = segment.value().ident.to_string();
-            let (input, parser_name) = (&self.input, &self.name);
-            m.tts = if name == "parse_marker" || name == "parse_context" {
-                let mark = parse_marker_ident(self.input.span());
-                quote!([#parser_name; #input] #mark)
-            } else if name == "switch" || name.starts_with("parse_") {
-                let tokens = &m.tts;
-                quote!([#parser_name; #input] #tokens)
+            if name == "switch" || name.starts_with("parse_") {
+                let (tokens, input) = (&m.tts, &self.input);
+                let info = parser_info_ident(self.input.span());
+                let mark = parse_marker_ident(m.span());
+                m.tts = quote_spanned!(m.span() => [#info; #input; #mark] #tokens);
             } else {
                 return
-            };
+            }
         }
     }
 }
@@ -95,43 +104,45 @@ fn wrapping_fn_block(
         syn::ReturnType::Type(_, ty) => quote!(#ty),
     };
 
+    let span = function.span();
     let mark_ident = parse_marker_ident(input_ident.span());
-    let result_map = if raw {
-        quote!((|#mark_ident| #fn_block))
-    } else {
-        quote!((|#mark_ident| #scope::result::AsResult::as_result(#fn_block)))
+    let info_ident = parser_info_ident(function.ident.span());
+    let result_map = match raw {
+        true => quote_spanned!(span => (
+                |#info_ident, #mark_ident: &mut Option<_>| #fn_block)
+        ),
+        false => quote_spanned!(span => (
+            |#info_ident, #mark_ident: &mut Option<_>|
+                #scope::result::AsResult::as_result(#fn_block)
+        ))
     };
 
     let new_block_tokens = {
         let name = &function.ident;
         let name_str = name.to_string();
-        quote!({
-            let info = #scope::input::ParserInfo {
-                name: #name_str,
-                raw: #raw,
-            };
-
+        quote_spanned!(span => {
             // FIXME: Get rid of this!
+            let ___info = #scope::input::ParserInfo { name: #name_str, raw: #raw };
             if #scope::macros::is_parse_debug!() {
-                #scope::debug::parser_entry(&info);
+                #scope::debug::parser_entry(&___info);
             }
 
-            let marker = #scope::input::Input::mark(#input_ident, &info);
-            let mut result: #ret_ty = #result_map(marker.as_ref());
-            if let Err(ref mut error) = result {
-                let ctxt = #scope::input::Input::context(#input_ident, marker.as_ref());
-                error.push_context(ctxt, info);
+            let mut ___mark = #scope::input::Input::mark(#input_ident, &___info);
+            let mut __res: #ret_ty = #result_map(&___info, &mut ___mark);
+            if let Err(ref mut ___e) = __res {
+                let ___ctxt = #scope::input::Input::context(#input_ident, ___mark.as_ref());
+                ___e.push_context(___ctxt, ___info);
             }
 
             // FIXME: Get rid of this!
             if #scope::macros::is_parse_debug!() {
-                let ctxt = #scope::input::Input::context(#input_ident, marker.as_ref());
-                let string = ctxt.map(|c| c.to_string());
-                #scope::debug::parser_exit(&info, result.is_ok(), string);
+                let ___ctxt = #scope::input::Input::context(#input_ident, ___mark.as_ref());
+                let ___string = ___ctxt.map(|c| c.to_string());
+                #scope::debug::parser_exit(&___info, __res.is_ok(), ___string);
             }
 
-            #scope::input::Input::unmark(#input_ident, &info, result.is_ok(), marker);
-            result
+            #scope::input::Input::unmark(#input_ident, &___info, __res.is_ok(), ___mark);
+            __res
         })
     };
 
@@ -155,12 +166,7 @@ fn parser_attribute(input: TokenStream, is_raw: bool) -> PResult<TokenStream2> {
             path: input_ident.clone().into()
         });
 
-        let mut transformer = ParserTransformer {
-            input: input_expr,
-            name: function.ident.clone(),
-            state: State::Start
-        };
-
+        let mut transformer = ParserTransformer::from(input_expr);
         visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
     }
 
@@ -187,11 +193,7 @@ pub fn parser(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 impl Case {
-    fn to_tokens<'a, I>(
-        input: &syn::Expr,
-        parser_name: &syn::Ident,
-        mut cases: I
-    ) -> TokenStream2
+    fn to_tokens<'a, I>(input: &syn::Expr, mut cases: I) -> TokenStream2
         where I: Iterator<Item = &'a Case>
     {
         let this = match cases.next() {
@@ -199,12 +201,7 @@ impl Case {
             Some(case) => case
         };
 
-        let mut transformer = ParserTransformer {
-            input: input.clone(),
-            name: parser_name.clone(),
-            state: State::Start
-        };
-
+        let mut transformer = ParserTransformer::from(input.clone());
         let mut case_expr = this.expr.clone();
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
 
@@ -233,7 +230,7 @@ impl Case {
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(&input, parser_name, cases);
+                let rest_tokens = Case::to_tokens(&input, cases);
 
                 quote! {
                     #(
@@ -251,7 +248,7 @@ impl Case {
 
 impl Switch {
     fn to_tokens(&self) -> TokenStream2 {
-        Case::to_tokens(&self.input, &self.parser_name, self.cases.iter())
+        Case::to_tokens(&self.input, self.cases.iter())
     }
 }
 

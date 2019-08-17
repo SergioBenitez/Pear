@@ -160,5 +160,9 @@ fn line_col(string: &str) -> (usize, usize) {
     }
 
     let (line_count, last_line) = string.lines().enumerate().last().unwrap();
-    (line_count + 1, last_line.len() + 1)
+    if string.ends_with('\n') {
+        (line_count + 2, 1)
+    } else {
+        (line_count + 1, last_line.len() + 1)
+    }
 }

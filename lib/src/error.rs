@@ -110,8 +110,6 @@ impl<I: Input> Clone for ParseContext<I> where I::Context: Clone {
     }
 }
 
-// // FIXME: Dedup this.
-
 impl<I: Input> fmt::Display for ParseError<I>
     where Expected<I>: Display, I::Context: Display
 {
@@ -132,9 +130,9 @@ impl<I: Input> fmt::Display for ParseError<I>
 }
 
 impl<I: Input> Display for Expected<I>
-    where I::Token: Debug + Display,
-          I::Slice: Debug + Display,
-          I::Many: Debug + Display
+    where I::Token: Debug,
+          I::Slice: Debug,
+          I::Many: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
@@ -181,45 +179,3 @@ impl<I: Input> Display for Expected<I>
         }
     }
 }
-
-// impl<I: Input> Display for Expected<I>
-//     where I::Token: Debug, I::Slice: Debug, I::Many: Debug
-// {
-//     default fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match *self {
-//             Expected::Token(Some(ref expected), Some(ref found)) => {
-//                 write!(f, "expected token {:?} but found {:?}", expected, found)
-//             }
-//             Expected::Token(None, Some(ref found)) => {
-//                 write!(f, "unexpected token: {:?}", found)
-//             }
-//             Expected::Token(Some(ref expected), None) => {
-//                 write!(f, "expected token {:?} but none was found", expected)
-//             }
-//             Expected::Token(None, None) => {
-//                 write!(f, "expected any token but none was found")
-//             }
-//             Expected::Slice(Some(ref expected), Some(ref found)) => {
-//                 write!(f, "expected slice {:?} but found {:?}", expected, found)
-//             }
-//             Expected::Slice(None, Some(ref found)) => {
-//                 write!(f, "unexpected slice: {:?}", found)
-//             }
-//             Expected::Slice(Some(ref expected), None) => {
-//                 write!(f, "expected slice {:?} but none was found", expected)
-//             }
-//             Expected::Slice(None, None) => {
-//                 write!(f, "expected any slice but none was found")
-//             }
-//             Expected::Custom(ref message) => {
-//                 write!(f, "{}", message)
-//             }
-//             Expected::Eof(None) => {
-//                 write!(f, "expected EOF but input remains")
-//             }
-//             Expected::Eof(Some(ref token)) => {
-//                 write!(f, "expected EOF but found {:?}", token)
-//             }
-//         }
-//     }
-// }
