@@ -11,8 +11,8 @@ pub enum Expected<I: Input> {
 }
 
 pub struct ParseContext<I: Input> {
-    parser: ParserInfo,
-    context: Option<I::Context>,
+    pub parser: ParserInfo,
+    pub context: Option<I::Context>,
 }
 
 pub struct ParseError<I: Input> {
