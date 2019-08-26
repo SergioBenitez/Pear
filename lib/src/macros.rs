@@ -173,7 +173,7 @@ macro_rules! parse_error {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_marker {
-    ([$n:expr; $i:expr; $mark:expr]) => ($mark.as_ref());
+    ([$n:expr; $i:expr; $marker:expr]) => (*$marker);
 }
 
 #[doc(hidden)]
@@ -187,7 +187,7 @@ macro_rules! parse_mark {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! parse_context {
-    ([$n:expr; $i:expr; $mark:expr]) => ($crate::input::Input::context($i, $mark.as_ref()));
+    ([$n:expr; $i:expr; $marker:expr]) => ($crate::input::Input::context($i, $marker));
 }
 
 /// FIXME: This is an issue with rustc here where if `$input` is `expr`

@@ -4,7 +4,7 @@
 use std::fmt;
 
 use pear::parsers::*;
-use pear::{result::Result, input::Text};
+use pear::result::Result;
 use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
 #[derive(Debug, PartialEq)]
@@ -160,7 +160,8 @@ a=1
 fn main() {
     // let start = time::precise_time_ns();
     // let result = parse!(ini: &mut INI_STRING);
-    let result = parse!(ini: &mut Text::from(INI_STRING));
+    // let result = parse!(ini: &mut pear::input::Text::from(INI_STRING));
+    let result = parse!(ini: &mut INI_STRING);
     // let end = time::precise_time_ns();
 
     match result {

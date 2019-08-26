@@ -8,27 +8,27 @@ type FourMarkers = (usize, usize, usize, usize);
 
 #[parser]
 fn simple<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
-    let first = parse_marker!().unwrap();
+    let first = parse_marker!();
     eat('.')?;
-    let second = parse_marker!().unwrap();
+    let second = parse_marker!();
     eat_slice("..")?;
-    let third = parse_marker!().unwrap();
+    let third = parse_marker!();
     eat_slice("..")?;
-    let fourth = parse_marker!().unwrap();
-    (*first, *second, *third, *fourth)
+    let fourth = parse_marker!();
+    (first, second, third, fourth)
 }
 
 #[parser]
 fn resetting<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
-    let first = *parse_marker!().unwrap();
+    let first = parse_marker!();
     eat('.')?;
     parse_mark!();
-    let second = *parse_marker!().unwrap();
+    let second = parse_marker!();
     eat_slice("..")?;
-    let third = *parse_marker!().unwrap();
+    let third = parse_marker!();
     eat_slice("..")?;
     parse_mark!();
-    let fourth = *parse_marker!().unwrap();
+    let fourth = parse_marker!();
     (first, second, third, fourth)
 }
 

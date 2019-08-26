@@ -28,6 +28,11 @@ pub struct ParserInfo {
     pub raw: bool,
 }
 
+
+pub trait Rewind: Sized + Input {
+    fn rewind_to(&mut self, marker: &Self::Marker);
+}
+
 pub trait Input: Sized {
     type Token: PartialEq + Token<Self>;
     type Slice: PartialEq + Length + Slice<Self>;
@@ -73,17 +78,16 @@ pub trait Input: Sized {
     /// Returns `true` if there are no more tokens.
     fn is_eof(&mut self) -> bool;
 
-    fn mark(&mut self, _info: &ParserInfo) -> Option<Self::Marker> {
-        None
-    }
+    #[allow(unused_variables)]
+    fn mark(&mut self, info: &ParserInfo) -> Self::Marker;
 
     /// Optionally returns a context to identify the current input position. By
     /// default, this method returns `None`, indicating that no context could be
     /// resolved.
-    fn context(&mut self, _mark: Option<&Self::Marker>) -> Option<Self::Context> {
+    fn context(&mut self, _mark: &Self::Marker) -> Option<Self::Context> {
         None
     }
 
-    fn unmark(&mut self, _info: &ParserInfo, _success: bool, _mark: Option<Self::Marker>) { }
+    #[allow(unused_variables)]
+    fn unmark(&mut self, info: &ParserInfo, success: bool, mark: Self::Marker) { }
 }
-

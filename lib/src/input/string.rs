@@ -10,8 +10,8 @@ impl<'a> Input for &'a str {
     type Slice = &'a str;
     type Many = Self::Slice;
 
-    type Marker = usize;
-    type Context = String;
+    type Marker = &'a str;
+    type Context = &'a str;
 
     /// Returns a copy of the current token, if there is one.
     fn token(&mut self) -> Option<Self::Token> {
@@ -104,10 +104,12 @@ impl<'a> Input for &'a str {
         self.is_empty()
     }
 
-    fn context(&mut self, _mark: Option<&Self::Marker>) -> Option<Self::Context> {
-        match std::cmp::min(self.len(), 5) {
-            0 => None,
-            n => Some(format!("{:?}", &self[..n]))
-        }
+    fn mark(&mut self, _info: &ParserInfo) -> Self::Marker {
+        *self
+    }
+
+    fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
+        let consumed = mark.len() - self.len();
+        Some(&mark[..consumed])
     }
 }

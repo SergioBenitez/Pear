@@ -4,7 +4,7 @@ mod string;
 mod text;
 mod text_file;
 
-pub use input::{Input, Token, Slice, ParserInfo};
+pub use input::*;
 pub use text::{Text, Span};
 pub use length::Length;
 

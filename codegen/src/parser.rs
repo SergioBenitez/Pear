@@ -201,3 +201,29 @@ impl Parse for Switch {
         Ok(Switch { input, cases })
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct AttrArgs {
+    pub raw: bool,
+    pub rewind: bool,
+}
+
+impl Parse for AttrArgs {
+    fn parse(input: SynParseStream) -> PResult<Self> {
+        let args = input.call(<Punctuated<syn::Ident, Token![,]>>::parse_terminated)?;
+        let (mut raw, mut rewind) = Default::default();
+        for case in args.iter() {
+            if case == "raw" {
+                raw = true;
+            } else if case == "rewind" {
+                rewind = true;
+            } else {
+                return Err(case.span()
+                           .error(format!("unknown attribute argument `{}`", case))
+                           .help("supported arguments are: `rewind`"));
+            }
+        }
+
+        Ok(AttrArgs { raw, rewind })
+    }
+}

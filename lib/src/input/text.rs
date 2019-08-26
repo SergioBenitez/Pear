@@ -126,16 +126,16 @@ impl<'a> Input for Text<'a> {
         self.current.is_eof()
     }
 
-    fn mark(&mut self, _: &ParserInfo) -> Option<Self::Marker> {
-        Some(self.start.len() - self.current.len())
+    fn mark(&mut self, _: &ParserInfo) -> Self::Marker {
+        self.start.len() - self.current.len()
     }
 
-    fn context(&mut self, mark: Option<&Self::Marker>) -> Option<Self::Context> {
+    fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
         let bytes_read = self.start.len() - self.current.len();
         let pos = if bytes_read == 0 {
             Span { start: (1, 1, 0), end: (1, 1, 0), snippet: None }
         } else {
-            let start_offset = *mark.unwrap_or(&bytes_read.saturating_sub(10));
+            let start_offset = *mark;
             let end_offset = bytes_read;
 
             let to_start_str = &self.start[..start_offset];

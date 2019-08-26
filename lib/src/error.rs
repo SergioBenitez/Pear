@@ -130,9 +130,7 @@ impl<I: Input> fmt::Display for ParseError<I>
 }
 
 impl<I: Input> Display for Expected<I>
-    where I::Token: Debug,
-          I::Slice: Debug,
-          I::Many: Debug
+    where I::Token: Debug, I::Slice: Debug, I::Many: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
