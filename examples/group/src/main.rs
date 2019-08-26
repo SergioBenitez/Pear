@@ -1,12 +1,11 @@
 #![feature(proc_macro_hygiene)]
 #![warn(rust_2018_idioms)]
 
-use pear::result::Result;
-use pear::macros::{parser, switch, parse_declare, parse};
-use pear::input::Span;
+use pear::macros::{parser, switch, parse};
 use pear::parsers::*;
 
-parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str, Context = Span<'a>));
+type Input<'a> = pear::input::Text<'a>;
+type Result<'a, T> = pear::result::Result<T, Input<'a>>;
 
 #[derive(Debug)]
 struct Tokens(Vec<Token>);
@@ -49,18 +48,18 @@ fn inverse(c: char) -> char {
 }
 
 #[parser]
-fn group<'a, I: Input<'a>>(input: &mut I, kind: char) -> Result<Group, I> {
+fn group<'a>(input: &mut Input<'a>, kind: char) -> Result<'a, Group> {
     let (start, tokens, end) = (eat(kind)?, tokens()?, eat(inverse(kind))?);
     Group { start, tokens, end }
 }
 
 #[parser]
-fn ident<'a, I: Input<'a>>(input: &mut I) -> Result<String, I> {
+fn ident<'a>(input: &mut Input<'a>) -> Result<'a, String> {
     take_some_while(is_ident_char)?.to_string()
 }
 
 #[parser]
-fn tokens<'a, I: Input<'a>>(input: &mut I) -> Result<Tokens, I> {
+fn tokens<'a>(input: &mut Input<'a>) -> Result<'a, Tokens> {
     let mut tokens = Vec::new();
     loop {
         skip_while(is_whitespace)?;

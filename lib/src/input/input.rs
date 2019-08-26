@@ -28,7 +28,6 @@ pub struct ParserInfo {
     pub raw: bool,
 }
 
-
 pub trait Rewind: Sized + Input {
     fn rewind_to(&mut self, marker: &Self::Marker);
 }

@@ -204,8 +204,8 @@ impl Parse for Switch {
 
 #[derive(Debug, Clone)]
 pub struct AttrArgs {
-    pub raw: bool,
-    pub rewind: bool,
+    pub raw: Option<Span>,
+    pub rewind: Option<Span>,
 }
 
 impl Parse for AttrArgs {
@@ -214,9 +214,9 @@ impl Parse for AttrArgs {
         let (mut raw, mut rewind) = Default::default();
         for case in args.iter() {
             if case == "raw" {
-                raw = true;
+                raw = Some(case.span());
             } else if case == "rewind" {
-                rewind = true;
+                rewind = Some(case.span());
             } else {
                 return Err(case.span()
                            .error(format!("unknown attribute argument `{}`", case))

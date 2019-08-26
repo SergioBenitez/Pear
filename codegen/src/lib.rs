@@ -111,7 +111,7 @@ fn wrapping_fn_block(
     let span = function.span();
     let mark_ident = parse_marker_ident(input_ident.span());
     let info_ident = parser_info_ident(function.ident.span());
-    let result_map = match args.raw {
+    let result_map = match args.raw.is_some() {
         true => quote_spanned!(span => (
             |#info_ident, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
                 #fn_block
@@ -124,8 +124,12 @@ fn wrapping_fn_block(
         ))
     };
 
+    let rewind = args.rewind.map(|span| quote_spanned! { span =>
+        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
+    });
+
     let new_block_tokens = {
-        let (name, raw) = (&function.ident, args.raw);
+        let (name, raw) = (&function.ident, args.raw.is_some());
         let name_str = name.to_string();
         quote_spanned!(span => {
             // FIXME: Get rid of this!
@@ -139,6 +143,7 @@ fn wrapping_fn_block(
             if let Err(ref mut ___e) = __res {
                 let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
                 ___e.push_context(___ctxt, ___info);
+                #rewind
             }
 
             // FIXME: Get rid of this!
@@ -165,7 +170,7 @@ fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2
         span.error("`parser` attribute only supports functions")
     })?;
 
-    if !args.raw {
+    if !args.raw.is_some() {
         let (input_ident, _) = extract_input_ident_ty(&function)?;
         let input_expr = syn::Expr::Path(syn::ExprPath {
             attrs: vec![],
@@ -177,7 +182,7 @@ fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2
         visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
     }
 
-    let scope = match args.raw { true => quote!(crate), false => quote!(::pear) };
+    let scope = match args.raw.is_some() { true => quote!(crate), false => quote!(::pear) };
     function.block = Box::new(wrapping_fn_block(&function, scope, args)?);
 
     Ok(quote!(#function))

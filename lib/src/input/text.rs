@@ -1,4 +1,4 @@
-pub use crate::input::{Input, Token, Slice, ParserInfo};
+pub use crate::input::{Input, Rewind, Token, Slice, ParserInfo};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Span<'a> {
@@ -47,13 +47,9 @@ impl<'a, 'b: 'a> Slice<Text<'a>> for &'b str {
     default fn into_slice(self) -> &'a str { self }
 }
 
-impl Text<'_> {
-    /// Rewind the input `n` bytes. If `n` is greater than the number of bytes
-    /// that have been consumed, rewinds to the beginning of the input.
-    pub fn rewind(&mut self, n: usize) {
-        let consumed = self.start.len() - self.current.len();
-        let to_rewind = std::cmp::min(consumed, n);
-        self.current = &self.start[(consumed - to_rewind)..];
+impl Rewind for Text<'_> {
+    fn rewind_to(&mut self, marker: &Self::Marker) {
+        self.current = &self.start[*marker..];
     }
 }
 
