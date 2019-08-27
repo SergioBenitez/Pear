@@ -75,7 +75,7 @@ fn tokens<'a>(input: &mut Input<'a>) -> Result<'a, Tokens> {
     Tokens(tokens)
 }
 
-const STRING: &str = "(( hi )) ([ (hey)  there ]) hi";
+const STRING: &str = "(( hi )) ([ (hey  there ]) hi";
 
 fn main() {
     let result = parse!(tokens: &mut pear::input::Text::from(STRING));

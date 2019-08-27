@@ -114,6 +114,7 @@
 //!   * [`parse_declare!`](#parse_declare)
 //!   * [`parse_error!`](#parse_error)
 //!   * [`parse_try!`](#parse_try)
+//!   * [`impl_show_with!`](#impl_show_with)
 //!
 //! [`Input`]: crate::input::Input
 //! [`Result<O, I>`]: crate::result::Result
@@ -225,3 +226,38 @@ macro_rules! is_parse_debug {
         result
     })
 }
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! impl_show_with {
+    ($trait:ident, $($T:ty),+) => (
+        $(impl $crate::input::Show for $T {
+            #[inline(always)]
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::$trait::fmt(self, f)
+            }
+        })+
+    )
+}
+
+// #[doc(hidden)]
+// #[macro_export]
+// macro_rules! ident_impl_token {
+//     ([$($t:tt)+] $T:ty) => (
+//         impl<$($t)*> $crate::input::Token<$T> for <$T as $crate::input::Input>::Token { }
+//     );
+//     ($T:ty) => (
+//         impl $crate::input::Token<$T> for <$T as $crate::input::Input>::Token { }
+//     );
+// }
+
+// #[doc(hidden)]
+// #[macro_export]
+// macro_rules! ident_impl_slice {
+//     ([$($t:tt)+] $T:ty) => (
+//         impl<$($t)*> $crate::input::Slice<$T> for <$T as $crate::input::Input>::Slice { }
+//     );
+//     ($T:ty) => (
+//         impl $crate::input::Slice<$T> for <$T as $crate::input::Input>::Slice { }
+//     );
+// }

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::input::ParserInfo;
+use crate::input::{Show, ParserInfo};
 use crate::macros::is_parse_debug;
 
 type Index = usize;
@@ -141,6 +141,7 @@ fn debug_print(sibling_map: &mut Vec<bool>, node: Index) {
     });
 }
 
+// TODO: Take in &[&dyn Show] to display parser input parameters.
 #[doc(hidden)]
 pub fn parser_entry(parser: &ParserInfo) {
     if (parser.raw && is_parse_debug!("full")) || (!parser.raw && is_parse_debug!()) {
@@ -149,7 +150,7 @@ pub fn parser_entry(parser: &ParserInfo) {
 }
 
 #[doc(hidden)]
-pub fn parser_exit(parser: &ParserInfo, success: bool, ctxt: Option<String>) {
+pub fn parser_exit(parser: &ParserInfo, success: bool, ctxt: Option<&dyn Show>) {
     if (parser.raw && is_parse_debug!("full")) || (!parser.raw && is_parse_debug!()) {
         let done = PARSE_TREE.with(|key| {
             let mut tree = key.borrow_mut();
@@ -157,7 +158,7 @@ pub fn parser_exit(parser: &ParserInfo, success: bool, ctxt: Option<String>) {
             if let Some(last_node) = index {
                 let last = tree.get_mut(last_node);
                 last.success = Some(success);
-                last.context = ctxt;
+                last.context = ctxt.map(|c| c.to_string());
             }
 
             index

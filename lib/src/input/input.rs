@@ -1,26 +1,12 @@
-use std::fmt::Display;
+use crate::input::{Show, Length};
 
-use crate::input::Length;
+pub trait Token<I: Input>: Show + PartialEq<I::Token> { }
 
-pub trait Token<I: Input> {
-    fn eq_token(&self, other: &I::Token) -> bool;
-    fn into_token(self) -> I::Token;
-}
+pub trait Slice<I: Input>: Show + Length + PartialEq<I::Slice> { }
 
-impl<I: Input> Token<I> for I::Token {
-    default fn eq_token(&self, other: &I::Token) -> bool { self == other }
-    default fn into_token(self) -> I::Token { self }
-}
+impl<I: Input> Token<I> for I::Token { }
 
-pub trait Slice<I: Input>: Length {
-    fn eq_slice(&self, other: &I::Slice) -> bool;
-    fn into_slice(self) -> I::Slice;
-}
-
-impl<I: Input> Slice<I> for I::Slice {
-    default fn eq_slice(&self, other: &I::Slice) -> bool { self == other }
-    default fn into_slice(self) -> I::Slice { self }
-}
+impl<I: Input> Slice<I> for I::Slice { }
 
 #[derive(Debug, Copy, Clone)]
 pub struct ParserInfo {
@@ -29,16 +15,17 @@ pub struct ParserInfo {
 }
 
 pub trait Rewind: Sized + Input {
+    /// Resets `self` to the position identified by `marker`.
     fn rewind_to(&mut self, marker: &Self::Marker);
 }
 
 pub trait Input: Sized {
-    type Token: PartialEq + Token<Self>;
-    type Slice: PartialEq + Length + Slice<Self>;
+    type Token: Token<Self>;
+    type Slice: Slice<Self>;
     type Many: Length;
 
     type Marker: Copy;
-    type Context: Display;
+    type Context: Show;
 
     /// Returns a copy of the current token, if there is one.
     fn token(&mut self) -> Option<Self::Token>;
@@ -77,12 +64,13 @@ pub trait Input: Sized {
     /// Returns `true` if there are no more tokens.
     fn is_eof(&mut self) -> bool;
 
+    /// Emits a marker that represents the current parse position.
     #[allow(unused_variables)]
     fn mark(&mut self, info: &ParserInfo) -> Self::Marker;
 
-    /// Optionally returns a context to identify the current input position. By
-    /// default, this method returns `None`, indicating that no context could be
-    /// resolved.
+    /// Optionally returns a context to identify the input spanning from `mark`
+    /// until but excluding the current position. By default, this method
+    /// returns `None`, indicating that no context could be resolved.
     fn context(&mut self, _mark: &Self::Marker) -> Option<Self::Context> {
         None
     }

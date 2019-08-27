@@ -1,9 +1,8 @@
 pub use crate::input::{Input, Token, Slice, ParserInfo};
 
-impl<'a, 'b: 'a> Slice<&'a str> for &'b str {
-    default fn eq_slice(&self, other: &&str) -> bool { self == other }
-    default fn into_slice(self) -> &'a str { self }
-}
+impl<'a, 'b: 'a> Slice<&'a str> for &'b str { }
+
+// ident_impl_token!(&str);
 
 impl<'a> Input for &'a str {
     type Token = char;
@@ -20,11 +19,7 @@ impl<'a> Input for &'a str {
 
     /// Returns a copy of the current slice of size `n`, if there is one.
     fn slice(&mut self, n: usize) -> Option<Self::Slice> {
-        if self.len() < n {
-            None
-        } else {
-            self.get(..n)
-        }
+        self.get(..n)
     }
 
     /// Checks if the current token fulfills `cond`.

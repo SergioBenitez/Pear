@@ -1,4 +1,4 @@
-pub use crate::input::{Input, Rewind, Token, Slice, ParserInfo};
+pub use crate::input::{Input, Rewind, Token, Slice, Show, ParserInfo};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Span<'a> {
@@ -10,7 +10,7 @@ pub struct Span<'a> {
     pub snippet: Option<&'a str>
 }
 
-impl<'a> std::fmt::Display for Span<'a> {
+impl<'a> Show for Span<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (a, b, _) = self.start;
         let (c, d, _) = self.end;
@@ -42,10 +42,9 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
-impl<'a, 'b: 'a> Slice<Text<'a>> for &'b str {
-    default fn eq_slice(&self, other: &&str) -> bool { self == other }
-    default fn into_slice(self) -> &'a str { self }
-}
+impl<'a, 'b> Slice<Text<'a>> for &'b str { }
+
+// ident_impl_token!(Text<'_>);
 
 impl Rewind for Text<'_> {
     fn rewind_to(&mut self, marker: &Self::Marker) {

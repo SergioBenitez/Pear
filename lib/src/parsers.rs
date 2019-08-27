@@ -1,6 +1,6 @@
 use crate::result::Result;
 use crate::error::{ParseError, Expected};
-use crate::input::{Input, Length, Token, Slice};
+use crate::input::{Input, Length, Token, Slice, Show};
 use crate::macros::parser;
 
 // // TODO:
@@ -16,7 +16,12 @@ fn expected_token<T, A, I>(
 ) -> Result<A, I>
     where T: Token<I>, I: Input
 {
-    let expected = Expected::Token(token.map(|t| t.into_token()), input.token());
+    // FIXME(show)
+    // let expected = Expected::Token(token.map(|t| t.into_token()), input.token());
+    // Err(ParseError::expected(expected))
+
+    let string = token.map(|t| (&t as &dyn Show).to_string());
+    let expected = Expected::Token(string, input.token());
     Err(ParseError::expected(expected))
 }
 
@@ -27,8 +32,13 @@ fn expected_slice<S, A, I>(
 ) -> Result<A, I>
     where S: Slice<I>, I: Input
 {
-    let len = slice.len();
-    let expected = Expected::Slice(Some(slice.into_slice()), input.slice(len));
+    // FIXME(show)
+    // let len = slice.len();
+    // let expected = Expected::Slice(Some(slice.into_slice()), input.slice(len));
+    // Err(ParseError::expected(expected))
+
+    let string = (&slice as &dyn Show).to_string();
+    let expected = Expected::Slice(Some(string), input.slice(slice.len()));
     Err(ParseError::expected(expected))
 }
 
@@ -37,7 +47,7 @@ fn expected_slice<S, A, I>(
 pub fn eat<I, T>(input: &mut I, token: T) -> Result<I::Token, I>
     where I: Input, T: Token<I>
 {
-    match input.eat(|t| token.eq_token(t)) {
+    match input.eat(|t| &token == t) {
         Some(token) => Ok(token),
         None => expected_token(input, Some(token))
     }
@@ -68,7 +78,7 @@ pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
 pub fn eat_slice<I, S>(input: &mut I, slice: S) -> Result<I::Slice, I>
     where I: Input, S: Slice<I>
 {
-    match input.eat_slice(slice.len(), |s| slice.eq_slice(s)) {
+    match input.eat_slice(slice.len(), |s| &slice == s) {
         Some(slice) => Ok(slice),
         None => expected_slice(input, slice)
     }
@@ -79,7 +89,7 @@ pub fn eat_slice<I, S>(input: &mut I, slice: S) -> Result<I::Slice, I>
 pub fn peek<I, T>(input: &mut I, token: T) -> Result<(), I>
     where I: Input, T: Token<I>
 {
-    match input.peek(|t| token.eq_token(t)) {
+    match input.peek(|t| &token == t) {
         true => Ok(()),
         false => expected_token(input, Some(token))
     }
@@ -112,7 +122,7 @@ pub fn peek_if<I, F>(input: &mut I, cond: F) -> Result<(), I>
 pub fn peek_slice<I, S>(input: &mut I, slice: S) -> Result<(), I>
     where I: Input, S: Slice<I>
 {
-    match input.peek_slice(slice.len(), |s| slice.eq_slice(s)) {
+    match input.peek_slice(slice.len(), |s| &slice == s) {
         true => Ok(()),
         false => expected_slice(input, slice)
     }
@@ -170,7 +180,7 @@ pub fn take_while_until<I, T, F>(
           T: Token<I>,
           F: FnMut(&I::Token) -> bool
 {
-    take_while(input, |t| cond(t) && !until.eq_token(t))
+    take_while(input, |t| cond(t) && (&until != t))
 }
 
 /// Consumes tokens while `cond` matches and the token is not `until`. Succeeds
@@ -185,7 +195,7 @@ pub fn take_some_while_until<I, T, F>(
           T: Token<I>,
           F: FnMut(&I::Token) -> bool
 {
-    take_some_while(input, |t| cond(t) && !until.eq_token(t))
+    take_some_while(input, |t| cond(t) && (&until != t))
 }
 
 /// Takes at most `n` tokens.
@@ -233,7 +243,7 @@ pub fn delimited<I, T, F>(
           F: FnMut(&I::Token) -> bool
 {
     eat(input, start)?;
-    let output = input.take(|t| cond(t) && !end.eq_token(t));
+    let output = input.take(|t| cond(t) && (&end != t));
     eat(input, end)?;
     Ok(output)
 }
@@ -253,7 +263,7 @@ pub fn delimited_some<I, T, F>(
           F: FnMut(&I::Token) -> bool
 {
     eat(input, start)?;
-    let output = take_some_while(input, |t| cond(t) && !end.eq_token(t))?;
+    let output = take_some_while(input, |t| cond(t) && (&end != t))?;
     eat(input, end)?;
     Ok(output)
 }

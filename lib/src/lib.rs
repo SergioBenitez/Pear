@@ -3,7 +3,7 @@
 
 #![warn(rust_2018_idioms)]
 
-pub mod macros;
+#[macro_use] pub mod macros;
 pub mod input;
 pub mod result;
 pub mod error;

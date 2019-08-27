@@ -1,11 +1,13 @@
+use std::fmt;
 use std::borrow::Cow;
-use std::fmt::{self, Display, Debug};
 
-use crate::input::{Input, ParserInfo};
+use crate::input::{Input, Show, ParserInfo};
 
 pub enum Expected<I: Input> {
-    Token(Option<I::Token>, Option<I::Token>),
-    Slice(Option<I::Slice>, Option<I::Slice>),
+    // Token(Option<I::Token>, Option<I::Token>),
+    // Slice(Option<I::Slice>, Option<I::Slice>),
+    Token(Option<String>, Option<I::Token>),
+    Slice(Option<String>, Option<I::Slice>),
     Custom(Cow<'static, str>),
     Eof(Option<I::Token>),
 }
@@ -38,8 +40,8 @@ impl<I: Input> ParseError<I> {
     }
 }
 
-impl<I: Input> Debug for ParseError<I>
-    where I::Context: Debug, I::Slice: Debug, I::Token: Debug
+impl<I: Input> fmt::Debug for ParseError<I>
+    where I::Context: fmt::Debug, I::Slice: fmt::Debug, I::Token: fmt::Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ParseError")
@@ -49,7 +51,7 @@ impl<I: Input> Debug for ParseError<I>
     }
 }
 
-impl<I: Input> Debug for Expected<I> where I::Token: Debug, I::Slice: Debug {
+impl<I: Input> fmt::Debug for Expected<I> where I::Token: fmt::Debug, I::Slice: fmt::Debug {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expected::Token(e, v) => {
@@ -68,7 +70,7 @@ impl<I: Input> Debug for Expected<I> where I::Token: Debug, I::Slice: Debug {
     }
 }
 
-impl<I: Input> Debug for ParseContext<I> where I::Context: Debug {
+impl<I: Input> fmt::Debug for ParseContext<I> where I::Context: fmt::Debug {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ParseContext")
             .field("parser", &self.parser)
@@ -110,18 +112,13 @@ impl<I: Input> Clone for ParseContext<I> where I::Context: Clone {
     }
 }
 
-impl<I: Input> fmt::Display for ParseError<I>
-    where Expected<I>: Display, I::Context: Display
-{
-    #[inline]
+impl<I: Input> fmt::Display for ParseError<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.expected)?;
         for ctxt in &self.context {
-            write!(f, "\n + ({}", ctxt.parser.name)?;
+            write!(f, "\n + {}", ctxt.parser.name)?;
             if let Some(ctxt) = &ctxt.context {
-                write!(f, " at {})", ctxt)?;
-            } else {
-                write!(f, ")")?;
+                write!(f, " at {})", ctxt as &dyn Show)?;
             }
         }
 
@@ -129,37 +126,33 @@ impl<I: Input> fmt::Display for ParseError<I>
     }
 }
 
-impl<I: Input> Display for Expected<I>
-    where I::Token: Debug, I::Slice: Debug, I::Many: Debug
-{
+impl<I: Input> fmt::Display for Expected<I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Expected::Token(Some(ref expected), Some(ref found)) => {
-                write!(f, "expected token {:?} but found {:?}", expected, found)
-                // write!(f, "expected token {} but found {}", expected, found)
+                let found = found as &dyn Show;
+                write!(f, "expected token {} but found {}", expected, found)
             }
             Expected::Token(None, Some(ref found)) => {
-                write!(f, "unexpected token: {:?}", found)
-                // write!(f, "unexpected token: {}", found)
+                let found = found as &dyn Show;
+                write!(f, "unexpected token: {}", found)
             }
             Expected::Token(Some(ref expected), None) => {
-                write!(f, "expected token {:?} but none was found", expected)
-                // write!(f, "expected token {} but none was found", expected)
+                write!(f, "expected token {} but none was found", expected)
             }
             Expected::Token(None, None) => {
                 write!(f, "expected any token but none was found")
             }
             Expected::Slice(Some(ref expected), Some(ref found)) => {
-                write!(f, "expected slice {:?} but found {:?}", expected, found)
-                // write!(f, "expected slice {} but found {}", expected, found)
+                let found = found as &dyn Show;
+                write!(f, "expected slice {} but found {}", expected, found)
             }
             Expected::Slice(None, Some(ref found)) => {
-                write!(f, "unexpected slice: {:?}", found)
-                // write!(f, "unexpected slice: {}", found)
+                let found = found as &dyn Show;
+                write!(f, "unexpected slice: {}", found)
             }
             Expected::Slice(Some(ref expected), None) => {
-                write!(f, "expected slice {:?} but none was found", expected)
-                // write!(f, "expected slice {} but none was found", expected)
+                write!(f, "expected slice {} but none was found", expected)
             }
             Expected::Slice(None, None) => {
                 write!(f, "expected any slice but none was found")
@@ -170,9 +163,9 @@ impl<I: Input> Display for Expected<I>
             Expected::Eof(None) => {
                 write!(f, "expected EOF but input remains")
             }
-            Expected::Eof(Some(ref token)) => {
-                write!(f, "expected EOF but found {:?}", token)
-                // write!(f, "expected EOF but found {}", token)
+            Expected::Eof(Some(ref found)) => {
+                let found = found as &dyn Show;
+                write!(f, "expected EOF but found {}", found)
             }
         }
     }

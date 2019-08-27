@@ -139,8 +139,8 @@ fn wrapping_fn_block(
             }
 
             let mut ___mark = #scope::input::Input::mark(#input_ident, &___info);
-            let mut __res: #ret_ty = #result_map(&___info, &mut ___mark);
-            if let Err(ref mut ___e) = __res {
+            let mut ___res: #ret_ty = #result_map(&___info, &mut ___mark);
+            if let Err(ref mut ___e) = ___res {
                 let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
                 ___e.push_context(___ctxt, ___info);
                 #rewind
@@ -149,12 +149,12 @@ fn wrapping_fn_block(
             // FIXME: Get rid of this!
             if #scope::macros::is_parse_debug!() {
                 let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
-                let ___string = ___ctxt.map(|c| c.to_string());
-                #scope::debug::parser_exit(&___info, __res.is_ok(), ___string);
+                let ___show = ___ctxt.as_ref().map(|c| c as &dyn #scope::input::Show);
+                #scope::debug::parser_exit(&___info, ___res.is_ok(), ___show);
             }
 
-            #scope::input::Input::unmark(#input_ident, &___info, __res.is_ok(), ___mark);
-            __res
+            #scope::input::Input::unmark(#input_ident, &___info, ___res.is_ok(), ___mark);
+            ___res
         })
     };
 
