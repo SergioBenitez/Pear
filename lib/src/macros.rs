@@ -127,6 +127,7 @@
 #[doc(hidden)] pub use pear_codegen::{parser, switch};
 #[doc(hidden)] pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
 #[doc(hidden)] pub use crate::{parse_marker, parse_mark, parse_context};
+#[doc(hidden)] pub use crate::impl_show_with;
 
 #[doc(hidden)]
 #[macro_export]
