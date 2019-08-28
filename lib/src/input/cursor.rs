@@ -21,9 +21,9 @@ impl<'a, T: PartialEq + Show> Rewind for Cursor<'a, T> {
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct Extent<'a, T> {
-    start: usize,
-    end: usize,
-    values: &'a [T],
+    pub start: usize,
+    pub end: usize,
+    pub values: &'a [T],
 }
 
 impl<T: Show> Show for Extent<'_, T> {
