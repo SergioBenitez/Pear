@@ -123,14 +123,14 @@ impl<'a, T: PartialEq + Show> Input for Cursor<'a, T> {
     }
 
     fn mark(&mut self, _: &ParserInfo) -> Self::Marker {
-        self.items.len() - self.start.len()
+        self.start.len() - self.items.len()
     }
 
     /// Optionally returns a context to identify the current input position. By
     /// default, this method returns `None`, indicating that no context could be
     /// resolved.
     fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
-        let end = self.items.len() - self.start.len();
+        let end = self.start.len() - self.items.len();
         let values = &self.start[*mark..end];
         Some(Extent { start: *mark, end, values })
     }
