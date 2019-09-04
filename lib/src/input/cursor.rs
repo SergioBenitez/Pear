@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use crate::input::{Input, Show, Rewind, ParserInfo};
 
 pub struct Cursor<'a, T> {
-    start: &'a [T],
-    items: &'a [T],
+    pub start: &'a [T],
+    pub items: &'a [T],
 }
 
 impl<'a, T> From<&'a [T]> for Cursor<'a, T> {

@@ -128,6 +128,10 @@ fn wrapping_fn_block(
         <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
     });
 
+    let peek = args.peek.map(|span| quote_spanned! { span =>
+        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
+    });
+
     let new_block_tokens = {
         let (name, raw) = (&function.ident, args.raw.is_some());
         let name_str = name.to_string();
@@ -144,6 +148,8 @@ fn wrapping_fn_block(
                 let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
                 ___e.push_context(___ctxt, ___info);
                 #rewind
+            } else {
+                #peek
             }
 
             // FIXME: Get rid of this!
