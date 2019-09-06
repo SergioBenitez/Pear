@@ -17,10 +17,15 @@ pub trait Spanned: private::Sealed {
     fn span(&self) -> Span;
 }
 
+const WARN_PREFIX: &str = "[warning] ";
+const NOTE_PREFIX: &str = "[note] ";
+const HELP_PREFIX: &str = "[help] ";
+
 #[allow(dead_code)]
-#[cfg(parse_nightly)]
+#[cfg(pear_nightly)]
 mod imp {
     use super::{Span, Spanned, SpanExt};
+    use super::{WARN_PREFIX, NOTE_PREFIX, HELP_PREFIX};
 
     #[derive(Debug)]
     pub struct Diagnostic(proc_macro::Diagnostic);
@@ -86,10 +91,25 @@ mod imp {
     }
 
     impl From<::syn::parse::Error> for Diagnostic {
-        fn from(e: ::syn::parse::Error) -> Diagnostic {
-            let inner = ::proc_macro::Diagnostic::spanned(
-                e.span().unstable(), ::proc_macro::Level::Error, e.to_string());
-            Diagnostic(inner)
+        fn from(errors: ::syn::parse::Error) -> Diagnostic {
+            let mut diag = errors.span().unstable().error(errors.to_string());
+            for e in errors.into_iter().skip(1) {
+                let message = e.to_string();
+                if message.starts_with(WARN_PREFIX) {
+                    let message = &message[WARN_PREFIX.len()..];
+                    diag = diag.span_warning(e.span().unstable(), message.to_string());
+                } else if message.starts_with(NOTE_PREFIX) {
+                    let message = &message[NOTE_PREFIX.len()..];
+                    diag = diag.span_note(e.span().unstable(), message.to_string());
+                } else if message.starts_with(HELP_PREFIX) {
+                    let message = &message[HELP_PREFIX.len()..];
+                    diag = diag.span_help(e.span().unstable(), message.to_string());
+                } else {
+                    diag = diag.span_error(e.span().unstable(), e.to_string());
+                }
+            }
+
+            Diagnostic(diag)
         }
     }
 
@@ -101,7 +121,20 @@ mod imp {
                 self.0.spans()[0]
             };
 
-            ::syn::parse::Error::new(span.into(), self.0.message())
+            let msg_prefix = match self.0.level() {
+                ::proc_macro::Level::Warning => WARN_PREFIX,
+                ::proc_macro::Level::Note => NOTE_PREFIX,
+                ::proc_macro::Level::Help => HELP_PREFIX,
+                _ => ""
+            };
+
+            let message = format!("{}{}", msg_prefix, self.0.message());
+            let mut error = ::syn::parse::Error::new(span.into(), message);
+            for child in self.0.children() {
+                error.combine(Diagnostic(child.clone()).into());
+            }
+
+            error
         }
     }
 
@@ -129,9 +162,10 @@ mod imp {
 }
 
 #[allow(dead_code)]
-#[cfg(not(parse_nightly))]
+#[cfg(not(pear_nightly))]
 mod imp {
     use super::{Span, Spanned, SpanExt};
+    use super::{WARN_PREFIX, NOTE_PREFIX, HELP_PREFIX};
 
     /// An enum representing a diagnostic level.
     #[derive(Copy, Clone, Debug)]
@@ -248,8 +282,13 @@ mod imp {
     }
 
     impl From<::syn::parse::Error> for Diagnostic {
-        fn from(e: ::syn::parse::Error) -> Diagnostic {
-            Diagnostic::spanned(e.span(), Level::Error, e.to_string())
+        fn from(errors: ::syn::parse::Error) -> Diagnostic {
+            let mut diag = errors.span().error(errors.to_string());
+            for e in errors.into_iter().skip(1) {
+                diag = diag.span_error(e.span(), e.to_string());
+            }
+
+            diag
         }
     }
 
@@ -261,7 +300,20 @@ mod imp {
                 self.spans[0]
             };
 
-            ::syn::parse::Error::new(span.into(), &self.message)
+            let msg_prefix = match self.level {
+                Level::Warning => WARN_PREFIX,
+                Level::Note => NOTE_PREFIX,
+                Level::Help => HELP_PREFIX,
+                _ => ""
+            };
+
+            let message = format!("{}{}", msg_prefix, self.message);
+            let mut error = ::syn::parse::Error::new(span.into(), message);
+            for child in self.children {
+                error.combine(child.into());
+            }
+
+            error
         }
     }
 

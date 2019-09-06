@@ -1,6 +1,6 @@
 #![recursion_limit="256"]
 
-#![cfg_attr(parse_nightly, feature(proc_macro_diagnostic, proc_macro_span))]
+#![cfg_attr(pear_nightly, feature(proc_macro_diagnostic, proc_macro_span))]
 
 extern crate proc_macro;
 extern crate proc_macro2;
@@ -65,13 +65,13 @@ impl VisitMut for ParserTransformer {
         // FIXME: Replace _inside_ the token stream as well so something like
         // println!("context = {:?}", parse_context!()) works.
         if let Some(ref segment) = m.path.segments.last() {
-            let name = segment.value().ident.to_string();
+            let name = segment.ident.to_string();
             if name == "switch" || name.starts_with("parse_") {
-                let (tokens, input) = (&m.tts, &self.input);
+                let (tokens, input) = (&m.tokens, &self.input);
                 let info = parser_info_ident(self.input.span());
                 let mark = parse_marker_ident(m.span());
                 // TODO: Check the type of #mark.
-                m.tts = quote_spanned!(m.span() => [#info; #input; #mark] #tokens);
+                m.tokens = quote_spanned!(m.span() => [#info; #input; #mark] #tokens);
             } else {
                 return
             }
@@ -80,17 +80,21 @@ impl VisitMut for ParserTransformer {
 }
 
 fn extract_input_ident_ty(f: &syn::ItemFn) -> PResult<(syn::Ident, syn::Type)> {
-    use syn::{FnArg::Captured, ArgCaptured as ArgCap, Pat::Ident};
-    use syn::{Type::Reference as TypeRef, TypeReference as Ref};
+    use syn::{FnArg::Typed, PatType, Pat::Ident, Type::Reference};
 
-    let first = f.decl.inputs.first().ok_or_else(|| {
-        let paren_span = f.decl.paren_token.span;
+    let first = f.sig.inputs.first().ok_or_else(|| {
+        let paren_span = f.sig.paren_token.span;
         paren_span.error("parsing functions require at least one input")
     })?;
 
-    match first.value() {
-        Captured(ArgCap { pat: Ident(pat), ty: TypeRef(Ref { elem, .. }), .. }) => {
-            Ok((pat.ident.clone(), *elem.clone()))
+    let e = first.span().error("invalid type for parser input");
+    match first {
+        Typed(PatType { pat, ty, .. }) => match **pat {
+            Ident(ref p) => match **ty {
+                Reference(ref r) => Ok((p.ident.clone(), *r.elem.clone())),
+                _ => Err(e)
+            }
+            _ => Err(e)
         }
         _ => Err(first.span().error("invalid type for parser input"))
     }
@@ -103,14 +107,14 @@ fn wrapping_fn_block(
 ) -> PResult<syn::Block> {
     let (input_ident, input_ty) = extract_input_ident_ty(&function)?;
     let fn_block = &function.block;
-    let ret_ty = match &function.decl.output {
+    let ret_ty = match &function.sig.output {
         syn::ReturnType::Default => quote!(()),
         syn::ReturnType::Type(_, ty) => quote!(#ty),
     };
 
     let span = function.span();
     let mark_ident = parse_marker_ident(input_ident.span());
-    let info_ident = parser_info_ident(function.ident.span());
+    let info_ident = parser_info_ident(function.sig.ident.span());
     let result_map = match args.raw.is_some() {
         true => quote_spanned!(span => (
             |#info_ident, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
@@ -133,7 +137,7 @@ fn wrapping_fn_block(
     });
 
     let new_block_tokens = {
-        let (name, raw) = (&function.ident, args.raw.is_some());
+        let (name, raw) = (&function.sig.ident, args.raw.is_some());
         let name_str = name.to_string();
         quote_spanned!(span => {
             // FIXME: Get rid of this!

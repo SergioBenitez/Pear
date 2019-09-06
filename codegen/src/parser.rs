@@ -10,7 +10,6 @@ pub trait Parse: Sized {
     fn parse(input: syn::parse::ParseStream) -> PResult<Self>;
 
     fn syn_parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-        // FIXME: This tosses away every error but the first.
         Self::parse(input).map_err(|e| e.into())
     }
 }
@@ -125,7 +124,7 @@ impl Parse for CallPattern {
 impl Pattern {
     fn validate(&self) -> PResult<()> {
         if let Pattern::Calls(ref calls) = self {
-            let first_name = calls.first().and_then(|call| call.value().name.clone());
+            let first_name = calls.first().and_then(|call| call.name.clone());
             for call in calls.iter() {
                 if first_name != call.name {
                     let mut err = if let Some(ref ident) = call.name {
