@@ -22,7 +22,7 @@ fn expected_token<T, A, I>(
 
     let string = token.map(|t| (&t as &dyn Show).to_string());
     let expected = Expected::Token(string, input.token());
-    Err(ParseError::expected(expected))
+    Err(ParseError::new(expected))
 }
 
 #[inline(always)]
@@ -39,7 +39,7 @@ fn expected_slice<S, A, I>(
 
     let string = (&slice as &dyn Show).to_string();
     let expected = Expected::Slice(Some(string), input.slice(slice.len()));
-    Err(ParseError::expected(expected))
+    Err(ParseError::new(expected))
 }
 
 /// Eats the current token if it is `token`.
@@ -69,7 +69,7 @@ pub fn eat_if<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
 pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.eat(|_| true) {
         Some(token) => Ok(token),
-        None => Err(ParseError::expected(Expected::Token(None, None)))
+        None => Err(ParseError::new(Expected::Token(None, None)))
     }
 }
 
@@ -133,7 +133,7 @@ pub fn peek_slice<I, S>(input: &mut I, slice: S) -> Result<(), I>
 pub fn peek_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.token() {
         Some(peeked) => Ok(peeked),
-        None => Err(ParseError::expected(Expected::Token(None, None)))
+        None => Err(ParseError::new(Expected::Token(None, None)))
     }
 }
 
@@ -162,7 +162,7 @@ pub fn take_some_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
 {
     let value = input.take(cond);
     if value.len() == 0 {
-        return Err(ParseError::expected(Expected::Token(None, None)));
+        return Err(ParseError::new(Expected::Token(None, None)));
     }
 
     Ok(value)
@@ -222,7 +222,7 @@ pub fn take_n_if<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, 
     let mut i = 0;
     let v = input.take(|c| { cond(c) && { let ok = i < n; i += 1; ok } });
     if v.len() != n {
-        return Err(ParseError::expected(Expected::Token(None, None)));
+        return Err(ParseError::new(Expected::Token(None, None)));
     }
 
     Ok(v)
@@ -275,7 +275,7 @@ pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
         Ok(())
     } else {
         let next = input.token();
-        Err(ParseError::expected(Expected::Eof(next)))
+        Err(ParseError::new(Expected::Eof(next)))
     }
 }
 

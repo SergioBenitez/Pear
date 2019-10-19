@@ -10,4 +10,6 @@ pub mod error;
 pub mod parsers;
 pub mod combinators;
 
+mod expected;
+
 #[doc(hidden)] pub mod debug;

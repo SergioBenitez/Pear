@@ -35,12 +35,13 @@ enum State {
 
 struct ParserTransformer {
     input: syn::Expr,
+    output: syn::Type,
     state: State,
 }
 
-impl From<syn::Expr> for ParserTransformer {
-    fn from(input: syn::Expr) -> ParserTransformer {
-        ParserTransformer { input, state: State::Start }
+impl ParserTransformer {
+    fn new(input: syn::Expr, output: syn::Type) -> ParserTransformer {
+        ParserTransformer { input, output, state: State::Start }
     }
 }
 
@@ -50,12 +51,20 @@ impl VisitMut for ParserTransformer {
         self.state = State::InTry;
         visit_mut::visit_expr_try_mut(self, v);
         self.state = last_state;
+
+        let expr = &v.expr;
+        let new_expr = quote_spanned!(expr.span() => #expr.map_err(|e| e.into()));
+        let method_call: syn::Expr = syn::parse2(new_expr).expect("okay");
+        v.expr = Box::new(method_call);
     }
 
     fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
         if let State::InTry = self.state {
             // TODO: Should we keep recursing?
             call.args.insert(0, self.input.clone());
+
+            // Only insert into the _first_ call.
+            self.state = State::Start;
         } else {
             visit_mut::visit_expr_call_mut(self, call);
         }
@@ -67,11 +76,12 @@ impl VisitMut for ParserTransformer {
         if let Some(ref segment) = m.path.segments.last() {
             let name = segment.ident.to_string();
             if name == "switch" || name.starts_with("parse_") {
-                let (tokens, input) = (&m.tokens, &self.input);
+                let (tokens, input, output) = (&m.tokens, &self.input, &self.output);
                 let info = parser_info_ident(self.input.span());
                 let mark = parse_marker_ident(m.span());
-                // TODO: Check the type of #mark.
-                m.tokens = quote_spanned!(m.span() => [#info; #input; #mark] #tokens);
+
+                let parser_info = quote!([#info; #input; #mark; #output]);
+                m.tokens = quote_spanned!(m.span() => #parser_info #tokens);
             } else {
                 return
             }
@@ -104,13 +114,10 @@ fn wrapping_fn_block(
     function: &syn::ItemFn,
     scope: TokenStream2,
     args: &AttrArgs,
+    ret_ty: &syn::Type,
 ) -> PResult<syn::Block> {
     let (input_ident, input_ty) = extract_input_ident_ty(&function)?;
     let fn_block = &function.block;
-    let ret_ty = match &function.sig.output {
-        syn::ReturnType::Default => quote!(()),
-        syn::ReturnType::Type(_, ty) => quote!(#ty),
-    };
 
     let span = function.span();
     let mark_ident = parse_marker_ident(input_ident.span());
@@ -123,7 +130,8 @@ fn wrapping_fn_block(
         ),
         false => quote_spanned!(span => (
             |#info_ident, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
-                #scope::result::AsResult::as_result(#fn_block)
+                use #scope::result::AsResult;
+                AsResult::as_result(#fn_block)
             }
         ))
     };
@@ -180,6 +188,13 @@ fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2
         span.error("`parser` attribute only supports functions")
     })?;
 
+    let ret_ty: syn::Type = match &function.sig.output {
+        syn::ReturnType::Default => {
+            return Err(function.sig.span().error("parse function requires return type"));
+        },
+        syn::ReturnType::Type(_, ty) => (**ty).clone(),
+    };
+
     if !args.raw.is_some() {
         let (input_ident, _) = extract_input_ident_ty(&function)?;
         let input_expr = syn::Expr::Path(syn::ExprPath {
@@ -188,12 +203,12 @@ fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2
             path: input_ident.clone().into()
         });
 
-        let mut transformer = ParserTransformer::from(input_expr);
+        let mut transformer = ParserTransformer::new(input_expr, ret_ty.clone());
         visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
     }
 
     let scope = match args.raw.is_some() { true => quote!(crate), false => quote!(::pear) };
-    function.block = Box::new(wrapping_fn_block(&function, scope, args)?);
+    function.block = Box::new(wrapping_fn_block(&function, scope, args, &ret_ty)?);
 
     Ok(quote!(#function))
 }
@@ -213,7 +228,7 @@ pub fn parser(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 impl Case {
-    fn to_tokens<'a, I>(input: &syn::Expr, mut cases: I) -> TokenStream2
+    fn to_tokens<'a, I>(input: &syn::Expr, output: &syn::Type, mut cases: I) -> TokenStream2
         where I: Iterator<Item = &'a Case>
     {
         let this = match cases.next() {
@@ -221,7 +236,7 @@ impl Case {
             Some(case) => case
         };
 
-        let mut transformer = ParserTransformer::from(input.clone());
+        let mut transformer = ParserTransformer::new(input.clone(), output.clone());
         let mut case_expr = this.expr.clone();
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
 
@@ -250,9 +265,9 @@ impl Case {
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(&input, cases);
+                let rest_tokens = Case::to_tokens(input, output, cases);
 
-                quote! {
+                quote_spanned! { this.span =>
                     #(
                         #prefix let Ok(#name) = #call_expr {
                             #case_expr
@@ -268,7 +283,7 @@ impl Case {
 
 impl Switch {
     fn to_tokens(&self) -> TokenStream2 {
-        Case::to_tokens(&self.input, self.cases.iter())
+        Case::to_tokens(&self.input, &self.output, self.cases.iter())
     }
 }
 

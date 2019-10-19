@@ -85,6 +85,7 @@ pub struct Case {
 #[derive(Debug)]
 pub struct Switch {
     pub input: syn::Expr,
+    pub output: syn::Type,
     pub cases: Punctuated<Case, Token![,]>
 }
 
@@ -173,13 +174,15 @@ impl Parse for Case {
 
 impl Parse for Switch {
     fn parse(stream: SynParseStream) -> PResult<Switch> {
-        let (_info, input, _marker) = stream.parse_group(Delimiter::Bracket, |inner| {
+        let (_info, input, _marker, output) = stream.parse_group(Delimiter::Bracket, |inner| {
             let info: syn::Ident = inner.parse()?;
             inner.parse::<Token![;]>()?;
             let input: syn::Expr = inner.parse()?;
             inner.parse::<Token![;]>()?;
             let marker: syn::Expr = inner.parse()?;
-            Ok((info, input, marker))
+            inner.parse::<Token![;]>()?;
+            let output: syn::Type = inner.parse()?;
+            Ok((info, input, marker, output))
         })?;
 
         let cases: Punctuated<Case, Token![,]> = stream.parse_terminated(Case::syn_parse)?;
@@ -197,7 +200,7 @@ impl Parse for Switch {
             }
         }
 
-        Ok(Switch { input, cases })
+        Ok(Switch { input, output, cases })
     }
 }
 

@@ -35,7 +35,7 @@ fn combo<'a>(input: &mut Text<'a>) -> Result<'a, &'a str> {
         ab() => eat_slice("ab")?,
         abc() => eat_slice("abc")?,
         abcd() => eat_slice("abcd")?,
-        _ => return parse_error!("not ab, abc, or abcd")
+        _ => parse_error!("not ab, abc, or abcd")?
     }
 }
 

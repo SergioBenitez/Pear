@@ -32,7 +32,7 @@ parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
 fn int<'a, I: Input<'a>>(input: &mut I) -> Result<i64, I> {
-    take_some_while(is_num)?.parse().or_else(|e| parse_error!("{}", e))
+    take_some_while(is_num)?.parse().or_else(|e| parse_error!("{}", e)?)
     // take_some_while(|c| ('0'..='9').contains(c)); // BENCH
     // 1 // BENCH
 }
@@ -52,7 +52,7 @@ fn number<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
 
     // NOT BENCH
     format!("{}.{}e{}", whole_num, frac, exp).parse()
-        .or_else(|e| parse_error!("{}", e))
+        .or_else(|e| parse_error!("{}", e)?)
 
     // 0.0 // BENCH
 }
@@ -97,8 +97,8 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<JsonValue<'a>, I> {
         peek('[') => JsonValue::Array(array()?),
         peek('"') => JsonValue::String(string()?),
         peek_if(|c| *c == '-' || is_num(c)) => JsonValue::Number(number()?),
-        token@peek_any() => return parse_error!("unexpected input: {:?}", token),
-        _ => return parse_error!("unknown input"),
+        token@peek_any() => parse_error!("unexpected input: {:?}", token)?,
+        _ => parse_error!("unknown input")?,
     };
 
     skip_while(is_whitespace)?;

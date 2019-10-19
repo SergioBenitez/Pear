@@ -35,7 +35,7 @@ fn combo<'a>(input: &mut Text<'a>) -> Result<'a, &'a str> {
         ab() => "ab",
         abc() => "abc",
         abcd() => "abcd",
-        _ => return parse_error!("not ab, abc, or abcd")
+        _ => parse_error!("not ab, abc, or abcd")?
     }
 }
 

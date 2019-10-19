@@ -63,7 +63,21 @@ impl<T: Show> Show for [T] {
 }
 
 impl_show_with! { Debug,
-    &str, char,
     u8, u16, u32, u64, u128, usize,
     i8, i16, i32, i64, i128, isize
+}
+
+macro_rules! impl_with_tick_display {
+    ($($T:ty,)*) => ($(
+        impl Show for $T {
+            #[inline(always)]
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "`{}`", self)
+            }
+        }
+    )*)
+}
+
+impl_with_tick_display! {
+    &str, char, std::borrow::Cow<'static, str>,
 }

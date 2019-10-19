@@ -1,15 +1,15 @@
-use crate::error::ParseError;
+use crate::error::{ParseError, Expected};
 use crate::input::Input;
 
-pub type Result<R, I> = ::std::result::Result<R, ParseError<I>>;
+pub type Result<R, I, C = Expected<I>> = ::std::result::Result<R, ParseError<I, C>>;
 
 #[doc(hidden)]
-pub trait AsResult<T, I: Input> {
-    fn as_result(self) -> Result<T, I>;
+pub trait AsResult<T, I: Input, E> {
+    fn as_result(self) -> Result<T, I, E>;
 }
 
-impl<T, I: Input> AsResult<T, I> for T {
-    fn as_result(self) -> Result<T, I> {
+impl<T, I: Input, E> AsResult<T, I, E> for T {
+    fn as_result(self) -> Result<T, I, E> {
         Ok(self)
     }
 }
@@ -22,9 +22,29 @@ impl<T, I: Input> AsResult<T, I> for T {
 //     }
 // }
 
+// // This one won't but makes some things uglier to write.
+// impl<T, I: Input, E2, E1: Into<E2>> AsResult<T, I, E2> for Result<T, I, E1> {
+//     fn as_result(self) -> Result<T, I, E2> {
+//         match self {
+//             Ok(v) => Ok(v),
+//             Err(e) => Err(ParseError {
+//                 error: e.error.into(),
+//                 contexts: e.contexts
+//             })
+//         }
+//     }
+// }
+
 // This one won't but makes some things uglier to write.
-impl<T, I: Input> AsResult<T, I> for Result<T, I> {
-    fn as_result(self) -> Result<T, I> {
+impl<T, I: Input, E> AsResult<T, I, E> for Result<T, I, E> {
+    fn as_result(self) -> Result<T, I, E> {
         self
     }
 }
+
+// // This one won't but makes some things uglier to write.
+// impl<T, I: Input, E> AsResult<T, I, B> for Result<T, I, A> {
+//     fn as_result(self) -> Result<T, I, B> {
+//         self
+//     }
+// }

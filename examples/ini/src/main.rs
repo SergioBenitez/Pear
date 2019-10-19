@@ -77,7 +77,7 @@ fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
 
 #[parser]
 fn float<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
-    take_some_while(is_num_char)?.parse().or_else(|e| parse_error!("{}", e))
+    take_some_while(is_num_char)?.parse().or_else(|e| parse_error!("{}", e)?)
 }
 
 #[parser]
