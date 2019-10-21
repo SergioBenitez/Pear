@@ -9,7 +9,7 @@ pub struct ParseContext<I: Input> {
     pub context: Option<I::Context>,
 }
 
-pub struct ParseError<I: Input, E> {
+pub struct ParseError<I: Input, E = Expected<I>> {
     pub error: E,
     pub contexts: Vec<ParseContext<I>>,
 }

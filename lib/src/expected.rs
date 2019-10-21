@@ -97,7 +97,7 @@ impl<I: Input> fmt::Display for Expected<I> {
                 write!(f, "expected EOF but found {}", found)
             }
             Expected::Other(ref other) => {
-                write!(f, "expected {}", other)
+                write!(f, "{}", other)
             }
         }
     }
