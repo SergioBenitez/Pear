@@ -4,12 +4,13 @@ use std::borrow::Cow;
 
 use pear::input::Text;
 use pear::{macros::*, parsers::*};
+use pear::error::ExpectedInput;
 
 type Result<'a, T> = pear::result::Result<T, Text<'a>, Error<'a>>;
 
 #[derive(Debug)]
 enum Error<'a> {
-    Expected(pear::error::Expected<Text<'a>>),
+    Expected(ExpectedInput<Text<'a>>),
     Other {
         message: Cow<'static, str>,
         second: Option<Cow<'static, str>>
@@ -28,8 +29,8 @@ impl<'a> From<&'static str> for Error<'a> {
     }
 }
 
-impl<'a> From<pear::error::Expected<Text<'a>>> for Error<'a> {
-    fn from(other: pear::error::Expected<Text<'a>>) -> Error<'a> {
+impl<'a> From<ExpectedInput<Text<'a>>> for Error<'a> {
+    fn from(other: ExpectedInput<Text<'a>>) -> Error<'a> {
         Error::Expected(other)
     }
 }

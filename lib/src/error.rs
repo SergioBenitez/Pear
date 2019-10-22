@@ -2,14 +2,14 @@ use std::fmt;
 
 use crate::input::{Input, Show, ParserInfo};
 
-pub use crate::expected::Expected;
+pub use crate::expected::{Expected, ExpectedInput};
 
 pub struct ParseContext<I: Input> {
     pub parser: ParserInfo,
     pub context: Option<I::Context>,
 }
 
-pub struct ParseError<I: Input, E = Expected<I>> {
+pub struct ParseError<I: Input, E = ExpectedInput<I>> {
     pub error: E,
     pub contexts: Vec<ParseContext<I>>,
 }

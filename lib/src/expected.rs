@@ -3,30 +3,43 @@ use std::borrow::Cow;
 
 use crate::input::{Input, Show};
 
-pub enum Expected<I: Input> {
+pub type ExpectedInput<I> = Expected<<I as Input>::Token, <I as Input>::Slice>;
+
+pub enum Expected<Token, Slice> {
     // Token(Option<I::Token>, Option<I::Token>),
     // Slice(Option<I::Slice>, Option<I::Slice>),
-    Token(Option<String>, Option<I::Token>),
-    Slice(Option<String>, Option<I::Slice>),
-    Eof(Option<I::Token>),
+    Token(Option<String>, Option<Token>),
+    Slice(Option<String>, Option<Slice>),
+    Eof(Option<Token>),
     Other(Cow<'static, str>),
 }
 
-impl<I: Input> From<String> for Expected<I> {
-    fn from(string: String) -> Expected<I> {
+impl<T: ToOwned, S: ToOwned> Expected<T, S> {
+    pub fn into_owned(self) -> Expected<T::Owned, S::Owned> {
+        use Expected::*;
+
+        match self {
+            Token(e, v) => Token(e, v.map(|v| v.to_owned())),
+            Slice(e, v) => Slice(e, v.map(|v| v.to_owned())),
+            Eof(v) => Eof(v.map(|v| v.to_owned())),
+            Other(v) => Other(v),
+        }
+    }
+}
+
+impl<T, S> From<String> for Expected<T, S> {
+    fn from(string: String) -> Expected<T, S> {
         Expected::Other(string.into())
     }
 }
 
-impl<I: Input> From<&'static str> for Expected<I> {
-    fn from(string: &'static str) -> Expected<I> {
+impl<T, S> From<&'static str> for Expected<T, S> {
+    fn from(string: &'static str) -> Expected<T, S> {
         Expected::Other(string.into())
     }
 }
 
-impl<I: Input> fmt::Debug for Expected<I>
-    where I::Token: fmt::Debug, I::Slice: fmt::Debug
-{
+impl<T: fmt::Debug, S: fmt::Debug> fmt::Debug for Expected<T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expected::Token(e, v) => {
@@ -45,9 +58,7 @@ impl<I: Input> fmt::Debug for Expected<I>
     }
 }
 
-impl<I: Input> Clone for Expected<I>
-    where I::Token: Clone, I::Slice: Clone
-{
+impl<T: Clone, S: Clone> Clone for Expected<T, S> {
     fn clone(&self) -> Self {
         match self {
             Expected::Token(e, f) => Expected::Token(e.clone(), f.clone()),
@@ -58,7 +69,7 @@ impl<I: Input> Clone for Expected<I>
     }
 }
 
-impl<I: Input> fmt::Display for Expected<I> {
+impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Expected::Token(Some(ref expected), Some(ref found)) => {

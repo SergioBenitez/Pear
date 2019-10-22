@@ -1,7 +1,8 @@
-use crate::error::{ParseError, Expected};
 use crate::input::Input;
+use crate::error::{ParseError, ExpectedInput};
 
-pub type Result<R, I, C = Expected<I>> = ::std::result::Result<R, ParseError<I, C>>;
+pub type Result<R, I, C = ExpectedInput<I>>
+    = std::result::Result<R, ParseError<I, C>>;
 
 #[doc(hidden)]
 pub trait AsResult<T, I: Input, E> {
