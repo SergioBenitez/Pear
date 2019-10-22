@@ -79,5 +79,5 @@ macro_rules! impl_with_tick_display {
 }
 
 impl_with_tick_display! {
-    &str, char, std::borrow::Cow<'static, str>,
+    &str, String, char, std::borrow::Cow<'static, str>,
 }
