@@ -14,7 +14,7 @@ pub enum Expected<Token, Slice> {
     Other(Cow<'static, str>),
 }
 
-impl<T: ToOwned, S: ToOwned> Expected<T, S> {
+impl<T: ToOwned, S: ?Sized + ToOwned> Expected<T, &S> {
     pub fn into_owned(self) -> Expected<T::Owned, S::Owned> {
         use Expected::*;
 
@@ -111,5 +111,16 @@ impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
                 write!(f, "{}", other)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Expected;
+
+    #[test]
+    fn test_into_owned() {
+        let expected: Expected<char, &str> = Expected::Slice(None, Some("hi"));
+        let _owned: Expected<char, String> = expected.into_owned();
     }
 }
