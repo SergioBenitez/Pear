@@ -62,6 +62,18 @@ impl<T: Show> Show for [T] {
     }
 }
 
+impl<T: Show> Show for Vec<T> {
+    #[inline(always)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, value) in self.iter().enumerate() {
+            if i > 0 { write!(f, " ")?; }
+            write!(f, "{}", value as &dyn Show)?;
+        }
+
+        write!(f, ")")
+    }
+}
+
 impl_show_with! { Debug,
     u8, u16, u32, u64, u128, usize,
     i8, i16, i32, i64, i128, isize
