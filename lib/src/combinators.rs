@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::collections::{HashMap, BTreeMap};
 
-use crate::{result::Result, input::{Input, Token}};
+use crate::input::{Input, Token, Result};
 use crate::macros::parser;
 use crate::parsers::*;
 

@@ -1,33 +1,33 @@
-use std::fmt;
+use crate::input::{Show, ParserInfo};
 
-use crate::input::{Input, Show, ParserInfo};
+pub use crate::expected::Expected;
 
-pub use crate::expected::{Expected, ExpectedInput};
-
-pub struct ParseContext<I: Input> {
+#[derive(Debug, Clone)]
+pub struct ParseContext<C> {
     pub parser: ParserInfo,
-    pub context: Option<I::Context>,
+    pub context: Option<C>,
 }
 
-pub struct ParseError<I: Input, E = ExpectedInput<I>> {
+#[derive(Debug, Clone)]
+pub struct ParseError<C, E> {
     pub error: E,
-    pub contexts: Vec<ParseContext<I>>,
+    pub contexts: Vec<ParseContext<C>>,
 }
 
-impl<I: Input, E> ParseError<I, E> {
-    pub fn new(error: E) -> ParseError<I, E> {
+impl<C, E> ParseError<C, E> {
+    pub fn new(error: E) -> ParseError<C, E> {
         ParseError {
             error: error.into(),
             contexts: vec![]
         }
     }
 
-    pub fn push_context(&mut self, context: Option<I::Context>, parser: ParserInfo) {
+    pub fn push_context(&mut self, context: Option<C>, parser: ParserInfo) {
         self.contexts.push(ParseContext { context, parser })
     }
 
     #[inline(always)]
-    pub fn into<E2: From<E>>(self) -> ParseError<I, E2> {
+    pub fn into<E2: From<E>>(self) -> ParseError<C, E2> {
         ParseError {
             error: self.error.into(),
             contexts: self.contexts,
@@ -35,52 +35,8 @@ impl<I: Input, E> ParseError<I, E> {
     }
 }
 
-impl<I: Input, E: fmt::Debug> fmt::Debug for ParseError<I, E>
-    where I::Context: fmt::Debug
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ParseError")
-            .field("error", &self.error)
-            .field("context", &self.contexts)
-            .finish()
-    }
-}
-
-impl<I: Input> fmt::Debug for ParseContext<I>
-    where I::Context: fmt::Debug
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ParseContext")
-            .field("parser", &self.parser)
-            .field("context", &self.context)
-            .finish()
-    }
-}
-
-impl<I: Input, E: Clone> Clone for ParseError<I, E>
-    where I::Context: Clone
-{
-    fn clone(&self) -> Self {
-        ParseError {
-            error: self.error.clone(),
-            contexts: self.contexts.clone(),
-        }
-    }
-}
-
-impl<I: Input> Clone for ParseContext<I>
-    where I::Context: Clone
-{
-    fn clone(&self) -> Self {
-        ParseContext {
-            context: self.context.clone(),
-            parser: self.parser.clone()
-        }
-    }
-}
-
-impl<I: Input, E: fmt::Display> fmt::Display for ParseError<I, E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<C: Show, E: std::fmt::Display> std::fmt::Display for ParseError<C, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.error)?;
         for ctxt in &self.contexts {
             write!(f, "\n + {}", ctxt.parser.name)?;

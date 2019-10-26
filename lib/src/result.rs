@@ -1,17 +1,28 @@
-use crate::input::Input;
-use crate::error::{ParseError, ExpectedInput};
+use crate::error::ParseError;
 
-pub type Result<R, I, C = ExpectedInput<I>>
-    = std::result::Result<R, ParseError<I, C>>;
+/// An alias to a Result where:
+///
+/// * `Ok` is `T`.
+/// * `Err` is a `ParseError` with context `C` and error `E`
+///
+/// For a `Result` that is parameterized only by the input type, see
+/// [`input::Result`](crate::input::Result).
+pub type Result<T, C, E> = std::result::Result<T, ParseError<C, E>>;
 
 #[doc(hidden)]
-pub trait AsResult<T, I: Input, E> {
-    fn as_result(self) -> Result<T, I, E>;
+pub trait AsResult<T, C, E> {
+    fn as_result(self) -> Result<T, C, E>;
 }
 
-impl<T, I: Input, E> AsResult<T, I, E> for T {
-    fn as_result(self) -> Result<T, I, E> {
+impl<T, C, E> AsResult<T, C, E> for T {
+    fn as_result(self) -> Result<T, C, E> {
         Ok(self)
+    }
+}
+
+impl<T, C, E> AsResult<T, C, E> for Result<T, C, E> {
+    fn as_result(self) -> Result<T, C, E> {
+        self
     }
 }
 
@@ -35,13 +46,6 @@ impl<T, I: Input, E> AsResult<T, I, E> for T {
 //         }
 //     }
 // }
-
-// This one won't but makes some things uglier to write.
-impl<T, I: Input, E> AsResult<T, I, E> for Result<T, I, E> {
-    fn as_result(self) -> Result<T, I, E> {
-        self
-    }
-}
 
 // // This one won't but makes some things uglier to write.
 // impl<T, I: Input, E> AsResult<T, I, B> for Result<T, I, A> {

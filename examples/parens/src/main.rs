@@ -1,7 +1,7 @@
 #![feature(proc_macro_hygiene)]
 #![warn(rust_2018_idioms)]
 
-use pear::{input::Text, result::Result};
+use pear::input::{Text, Result};
 use pear::macros::{parser, parse, parse_declare, parse_try};
 use pear::parsers::*;
 

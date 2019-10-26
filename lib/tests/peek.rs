@@ -3,7 +3,7 @@
 use pear::input::Text;
 use pear::{macros::*, parsers::*};
 
-type Result<'a, T> = pear::result::Result<T, Text<'a>>;
+type Result<'a, T> = pear::input::Result<T, Text<'a>>;
 
 #[parser(rewind, peek)]
 fn ab<'a>(input: &mut Text<'a>) -> Result<'a, ()> {

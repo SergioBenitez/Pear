@@ -5,7 +5,7 @@ use pear::macros::{parser, switch, parse};
 use pear::parsers::*;
 
 type Input<'a> = pear::input::Text<'a>;
-type Result<'a, T> = pear::result::Result<T, Input<'a>>;
+type Result<'a, T> = pear::input::Result<T, Input<'a>>;
 
 #[derive(Debug)]
 struct Tokens(Vec<Token>);

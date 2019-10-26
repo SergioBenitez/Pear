@@ -4,7 +4,7 @@
 use std::fmt;
 
 use pear::parsers::*;
-use pear::result::Result;
+use pear::input::Result;
 use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
 #[derive(Debug, PartialEq)]

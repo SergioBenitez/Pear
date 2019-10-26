@@ -1,7 +1,6 @@
 #![feature(proc_macro_hygiene)]
 
-use pear::input::{Text, Span};
-use pear::result::Result;
+use pear::input::{Text, Span, Result};
 use pear::{macros::*, parsers::*};
 
 type FourMarkers = (usize, usize, usize, usize);

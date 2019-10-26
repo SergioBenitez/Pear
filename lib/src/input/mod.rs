@@ -11,3 +11,9 @@ pub use cursor::{Cursor, Extent};
 pub use text::{Text, Span};
 pub use length::Length;
 pub use show::Show;
+
+use crate::error;
+
+pub type Expected<I> = error::Expected<<I as Input>::Token, <I as Input>::Slice>;
+pub type ParseError<I> = error::ParseError<<I as Input>::Context, Expected<I>>;
+pub type Result<T, I> = std::result::Result<T, ParseError<I>>;

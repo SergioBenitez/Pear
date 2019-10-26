@@ -43,7 +43,7 @@
 //!     ```rust
 //!     #![feature(proc_macro_hygiene)]
 //!
-//!     use pear::result::Result;
+//!     use pear::input::Result;
 //!     use pear::macros::parser;
 //!     use pear::parsers::*;
 //!     #

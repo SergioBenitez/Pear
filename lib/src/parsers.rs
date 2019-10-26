@@ -1,6 +1,5 @@
-use crate::result::Result;
 use crate::error::{ParseError, Expected};
-use crate::input::{Input, Length, Token, Slice, Show};
+use crate::input::{Input, Length, Token, Slice, Show, Result};
 use crate::macros::parser;
 
 // // TODO:

@@ -1,6 +1,6 @@
 #![feature(proc_macro_hygiene)]
 
-use pear::result::Result;
+use pear::input::Result;
 use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
 use pear::parsers::*;

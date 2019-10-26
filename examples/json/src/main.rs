@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use pear::result::Result;
+use pear::input::Result;
 use pear::macros::{parser, switch, parse_declare, parse, parse_error};
 use pear::combinators::*;
 use pear::parsers::*;

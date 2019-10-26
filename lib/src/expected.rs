@@ -1,9 +1,7 @@
 use std::fmt;
 use std::borrow::Cow;
 
-use crate::input::{Input, Show};
-
-pub type ExpectedInput<I> = Expected<<I as Input>::Token, <I as Input>::Slice>;
+use crate::input::Show;
 
 pub enum Expected<Token, Slice> {
     // Token(Option<I::Token>, Option<I::Token>),
