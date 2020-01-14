@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 pear = { path = "../../lib" }
-time = "0.1"
+time = "0.2"
