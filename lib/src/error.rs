@@ -41,7 +41,7 @@ impl<C: Show, E: std::fmt::Display> std::fmt::Display for ParseError<C, E> {
         for ctxt in &self.contexts {
             write!(f, "\n + {}", ctxt.parser.name)?;
             if let Some(ctxt) = &ctxt.context {
-                write!(f, " at {})", ctxt as &dyn Show)?;
+                write!(f, " at {}", ctxt as &dyn Show)?;
             }
         }
 

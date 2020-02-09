@@ -61,8 +61,8 @@ pub trait Input: Sized {
     fn skip<F>(&mut self, cond: F) -> usize
         where F: FnMut(&Self::Token) -> bool;
 
-    /// Returns `true` if there are no more tokens.
-    fn is_eof(&mut self) -> bool;
+    /// Returns `true` if there are at least `n` tokens remaining.
+    fn has(&mut self, n: usize) -> bool;
 
     /// Emits a marker that represents the current parse position.
     #[allow(unused_variables)]

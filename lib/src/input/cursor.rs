@@ -117,9 +117,9 @@ impl<'a, T: PartialEq + Show> Input for Cursor<'a, T> {
         self.take(cond).len()
     }
 
-    /// Returns `true` if there are no more tokens.
-    fn is_eof(&mut self) -> bool {
-        self.items.is_empty()
+    /// Returns `true` if there are at least `n` tokens remaining.
+    fn has(&mut self, n: usize) -> bool {
+        self.items.len() >= n
     }
 
     fn mark(&mut self, _: &ParserInfo) -> Self::Marker {

@@ -116,9 +116,9 @@ impl<'a> Input for Text<'a> {
         self.current.skip(cond)
     }
 
-    /// Returns `true` if there are no more tokens.
-    fn is_eof(&mut self) -> bool {
-        self.current.is_eof()
+    /// Returns `true` if there are at least `n` tokens remaining.
+    fn has(&mut self, n: usize) -> bool {
+        self.current.has(n)
     }
 
     fn mark(&mut self, _: &ParserInfo) -> Self::Marker {

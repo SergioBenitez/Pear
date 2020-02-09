@@ -84,19 +84,15 @@ impl<'a> Input for &'a str {
 
     /// Skips tokens while `cond` returns true. Returns the number of skipped
     /// tokens.
-    fn skip<F>(&mut self, mut cond: F) -> usize
+    fn skip<F>(&mut self, cond: F) -> usize
         where F: FnMut(&Self::Token) -> bool
     {
-        let mut skipped = 0;
-        match self.take(|c| { skipped += 1; cond(c) }) {
-            "" => 0,
-            _ => skipped - 1
-        }
+        self.take(cond).len()
     }
 
-    /// Returns `true` if there are no more tokens.
-    fn is_eof(&mut self) -> bool {
-        self.is_empty()
+    /// Returns `true` if there are at least `n` tokens remaining.
+    fn has(&mut self, n: usize) -> bool {
+        self.len() >= n
     }
 
     fn mark(&mut self, _info: &ParserInfo) -> Self::Marker {

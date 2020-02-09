@@ -139,6 +139,14 @@ macro_rules! parse {
             $crate::parsers::eof(input).map_err(|e| e.into())?;
             $crate::result::AsResult::as_result(result)
         })()
+    });
+    ($parser:ident ($($x:expr),*) : $e:expr) => ({
+        let input = $e;
+        (move || {
+            let result = $parser(input, $($x),*)?;
+            $crate::parsers::eof(input).map_err(|e| e.into())?;
+            $crate::result::AsResult::as_result(result)
+        })()
     })
 }
 

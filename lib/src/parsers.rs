@@ -1,5 +1,5 @@
 use crate::error::{ParseError, Expected};
-use crate::input::{Input, Length, Token, Slice, Show, Result};
+use crate::input::{Input, Length, Token, Slice, Show, Result, Rewind};
 use crate::macros::parser;
 
 // // TODO:
@@ -63,12 +63,31 @@ pub fn eat_if<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
     }
 }
 
-/// Eats the current token unconditionally.
+/// Eats the current token unconditionally. Fails if there are no tokens.
 #[parser(raw)]
 pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
     match input.eat(|_| true) {
         Some(token) => Ok(token),
         None => Err(ParseError::new(Expected::Token(None, None)))
+    }
+}
+
+/// Skips the current token unconditionally. Fails if there are no tokens.
+#[parser(raw)]
+pub fn skip_any<I: Input>(input: &mut I) -> Result<(), I> {
+    let mut skipped = false;
+    input.skip(|_| {
+        if !skipped {
+            skipped = true;
+            true
+        } else {
+            false
+        }
+    });
+
+    match skipped {
+        true => Ok(()),
+        false => Err(ParseError::new(Expected::Token(None, None))),
     }
 }
 
@@ -151,6 +170,80 @@ pub fn take_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     Ok(input.take(cond))
+}
+
+/// Consumes tokens while `cond` matches on a continously growing slice
+/// beginning at a length of `0` and ending when `cond` fails. Returns the slice
+/// between `0` and `cond` failing. Errors if no such slice exists.
+#[parser(raw)]
+pub fn take_while_slice<I, F>(input: &mut I, mut f: F) -> Result<I::Slice, I>
+    where I: Input, F: FnMut(&I::Slice) -> bool
+{
+    let mut len = 0;
+    let mut last_good = None;
+    loop {
+        match input.slice(len) {
+            // There's a slice and it matches the condition, keep going!
+            Some(ref slice) if f(slice) => {
+                last_good = Some(len);
+                len += 1;
+            }
+            // There's no slice of length `n`, but there _might_ be a slice of
+            // length `n + 1`, so we  need to keep trying.
+            None if input.has(len + 1) => len += 1,
+            // There are no more slices or the match failed. We're done.
+            _ => break,
+        }
+    }
+
+    match last_good {
+        Some(len) => Ok(input.eat_slice(len, |_| true).expect("slice exists")),
+        None => Err(ParseError::new(Expected::Slice(None, None)))
+    }
+}
+
+/// Consumes tokens while `cond` matches on a window of tokens of size `n` and
+/// returns them. Succeeds even if no tokens match.
+#[parser(raw)]
+pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::Many, I>
+    where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
+{
+    // FIXME: We should be able to call `parse_marker!` here.
+    let start = input.mark(&crate::input::ParserInfo {
+        name: "take_while_window",
+        raw: true
+    });
+
+    let mut tokens = 0;
+    loop {
+        // See `take_while_slice` for  an explanation of these arms.
+        match input.slice(n) {
+            Some(ref slice) if f(slice) => {
+                if let Err(_) = skip_any(input) { break; }
+                tokens += 1;
+            }
+            None if input.has(n + 1) => {
+                if let Err(_) = skip_any(input) { break; }
+                tokens += 1;
+            }
+            _ => break,
+        }
+    }
+
+    input.rewind_to(&start);
+    Ok(input.take(|_| match tokens > 0 {
+        true => { tokens -= 1; true },
+        false => false
+    }))
+}
+
+/// Consumes tokens while `cond` matches on a window of tokens of size `n` and
+/// returns them. Succeeds even if no tokens match.
+#[parser(raw)]
+pub fn take_until_slice<I, S>(input: &mut I, slice: S) -> Result<I::Many, I>
+    where I: Input + Rewind, S: Slice<I>
+{
+    take_while_window(input, slice.len(), |s| &slice != s)
 }
 
 /// Consumes tokens while `cond` matches and returns them. Succeeds only if at
@@ -270,11 +363,11 @@ pub fn delimited_some<I, T, F>(
 /// Succeeds only if the input has reached EOF.
 #[parser(raw)]
 pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
-    if input.is_eof() {
-        Ok(())
-    } else {
+    if input.has(1) {
         let next = input.token();
         Err(ParseError::new(Expected::Eof(next)))
+    } else {
+        Ok(())
     }
 }
 
