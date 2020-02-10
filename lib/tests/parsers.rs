@@ -90,3 +90,30 @@ fn test_while_slice_window() {
     let r = parse!(test_until_window("]", ""): &mut Text::from("🐥hi"));
     assert_eq!(r.unwrap(), "🐥hi");
 }
+
+#[test]
+fn test_window_termination() {
+    let result = take_while_window(&mut Text::from("a"), 2, |_| false);
+    assert_eq!(result.unwrap(), "a");
+
+    let result = take_while_window(&mut Text::from("aa"), 2, |_| false);
+    assert_eq!(result.unwrap(), "");
+
+    let result = take_some_while_window(&mut Text::from("a"), 2, |_| false);
+    assert!(result.is_err());
+
+    let result = take_some_while_window(&mut Text::from("aa"), 2, |_| false);
+    assert_eq!(result.unwrap(), "");
+
+    let result = take_while_window(&mut Text::from("aa"), 2, |_| true);
+    assert_eq!(result.unwrap(), "a");
+
+    let result = take_some_while_window(&mut Text::from("aa"), 2, |_| true);
+    assert_eq!(result.unwrap(), "a");
+
+    let result = take_while_window(&mut Text::from("aaab"), 2, |&s| s == "aa");
+    assert_eq!(result.unwrap(), "aa");
+
+    let result = take_some_while_window(&mut Text::from("aaab"), 2, |&s| s == "aa");
+    assert_eq!(result.unwrap(), "aa");
+}

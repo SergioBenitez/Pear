@@ -203,11 +203,20 @@ pub fn take_while_slice<I, F>(input: &mut I, mut f: F) -> Result<I::Slice, I>
 }
 
 /// Consumes tokens while `cond` matches on a window of tokens of size `n` and
-/// returns them. Succeeds even if no tokens match.
+/// returns all of the tokens prior to the first failure to match. For example,
+/// given a string of "aaab" and a size 2 window predicate of `window == "aa"`,
+/// the return value is `"aa"` as the first failure to match is at `"ab"`.
+///
+/// Always succeeds. If no tokens match, the result will be empty. If there are
+/// fewer than `n` tokens, takes all tokens and returns them.
 #[parser(raw)]
 pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
+    if !input.has(n) {
+        return Ok(input.take(|_| true));
+    }
+
     // FIXME: We should be able to call `parse_marker!` here.
     let start = input.mark(&crate::input::ParserInfo {
         name: "take_while_window",
@@ -235,6 +244,20 @@ pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::M
         true => { tokens -= 1; true },
         false => false
     }))
+}
+
+/// Consumes tokens while `cond` matches on a window of tokens of size `n` and
+/// returns them. Fails if there aren't at least `n` tokens, otherwise always
+/// succeeds. If no tokens match, the result will be empty.
+#[parser(raw)]
+pub fn take_some_while_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+    where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
+{
+    if !input.has(n) {
+        return Err(ParseError::new(Expected::Slice(None, None)));
+    }
+
+    take_while_window(input, n, f)
 }
 
 /// Consumes tokens while `cond` matches on a window of tokens of size `n` and
