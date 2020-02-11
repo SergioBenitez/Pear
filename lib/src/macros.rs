@@ -22,8 +22,22 @@
 //!       converted to `foo(input, a, b, c, ...)?` where `input` is the input
 //!       parameter.
 //!     - The inputs to every macro whose name starts with `parse_` are prefixed
-//!       with `[PARSER_NAME, INPUT]` where `PARSER_NAME` is the raw string
-//!       literal of the functon's name and `INPUT` is the input parameter.
+//!       with `[PARSER_NAME, INPUT, MARKER, OUTPUT]` where `PARSER_NAME` is the
+//!       raw string literal of the functon's name, `INPUT` is the input
+//!       parameter expression, `MARKER` is the marker expression, and `OUTPUT`
+//!       is the output type. Aditionally, if the input to the macro is a valid
+//!       Rust expression, it is applied the same transformations as a function
+//!       atributed with `#[parser]`.
+//!
+//!       Declare a `parse_` macro as:
+//!
+//!       ```rust,ignore
+//!       macro_rules! parse_my_macro {
+//!           ([$n:expr; $i:expr; $m:expr; $T:ty] ..) => {
+//!               /* .. */
+//!           }
+//!       }
+//!       ```
 //!
 //!     The following transformations are applied _around_ the attributed
 //!     function:
@@ -75,7 +89,7 @@
 //!
 //!   * [`parse!`](#parse)
 //!
-//!     Runs the parser with the given ame and input. After the parser returns,
+//!     Runs the parser with the given name and input. After the parser returns,
 //!     runs the [`eof()`] parser. Returns the combined result.
 //!
 //!     Syntax:
@@ -111,9 +125,14 @@
 //!     }
 //!     ```
 //!
+//!   * [`parse_try!`](#parse_try)
+//!
+//!     Take a single parser expression as input. Runs the parser. If the parser
+//!     succeeds, returns `Some` of the result. If the parser fails, returns
+//!     `None`.
+//!
 //!   * [`parse_declare!`](#parse_declare)
 //!   * [`parse_error!`](#parse_error)
-//!   * [`parse_try!`](#parse_try)
 //!   * [`impl_show_with!`](#impl_show_with)
 //!
 //! [`Input`]: crate::input::Input

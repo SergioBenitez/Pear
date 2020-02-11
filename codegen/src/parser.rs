@@ -84,8 +84,7 @@ pub struct Case {
 
 #[derive(Debug)]
 pub struct Switch {
-    pub input: syn::Expr,
-    pub output: syn::Type,
+    pub context: Context,
     pub cases: Punctuated<Case, Token![,]>
 }
 
@@ -101,7 +100,7 @@ fn parse_expr_call(input: SynParseStream) -> syn::parse::Result<syn::ExprCall> {
         attrs: vec![],
         func: Box::new(syn::Expr::Path(path)),
         paren_token: syn::token::Paren(paren_span),
-        args: args
+        args
     })
 }
 
@@ -172,9 +171,17 @@ impl Parse for Case {
     }
 }
 
-impl Parse for Switch {
-    fn parse(stream: SynParseStream) -> PResult<Switch> {
-        let (_info, input, _marker, output) = stream.parse_group(Delimiter::Bracket, |inner| {
+#[derive(Debug)]
+pub struct Context {
+    pub info: syn::Ident,
+    pub input: syn::Expr,
+    pub marker: syn::Expr,
+    pub output: syn::Type,
+}
+
+impl Parse for Context {
+    fn parse(stream: SynParseStream) -> PResult<Context> {
+        let (info, input, marker, output) = stream.parse_group(Delimiter::Bracket, |inner| {
             let info: syn::Ident = inner.parse()?;
             inner.parse::<Token![;]>()?;
             let input: syn::Expr = inner.parse()?;
@@ -185,6 +192,13 @@ impl Parse for Switch {
             Ok((info, input, marker, output))
         })?;
 
+        Ok(Context { info, input, marker, output })
+    }
+}
+
+impl Parse for Switch {
+    fn parse(stream: SynParseStream) -> PResult<Switch> {
+        let context = stream.try_parse(Context::syn_parse)?;
         let cases: Punctuated<Case, Token![,]> = stream.parse_terminated(Case::syn_parse)?;
         if !stream.is_empty() {
             Err(stream.error("trailing characters; expected eof"))?;
@@ -200,7 +214,7 @@ impl Parse for Switch {
             }
         }
 
-        Ok(Switch { input, output, cases })
+        Ok(Switch { context, cases })
     }
 }
 

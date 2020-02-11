@@ -33,6 +33,7 @@ enum State {
     InTry
 }
 
+#[derive(Clone)]
 struct ParserTransformer {
     input: syn::Expr,
     output: syn::Type,
@@ -71,12 +72,20 @@ impl VisitMut for ParserTransformer {
     }
 
     fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
-        // FIXME: Replace _inside_ the token stream as well so something like
-        // println!("context = {:?}", parse_context!()) works.
         if let Some(ref segment) = m.path.segments.last() {
             let name = segment.ident.to_string();
             if name == "switch" || name.starts_with("parse_") {
-                let (tokens, input, output) = (&m.tokens, &self.input, &self.output);
+                let (input, output) = (&self.input, &self.output);
+                let tokens = match syn::parse2::<syn::Expr>(m.tokens.clone()) {
+                    Ok(mut expr) => {
+                        let mut transformer = self.clone();
+                        transformer.state = State::Start;
+                        visit_mut::visit_expr_mut(&mut transformer, &mut expr);
+                        quote!(#expr)
+                    },
+                    Err(_) => m.tokens.clone()
+                };
+
                 let info = parser_info_ident(self.input.span());
                 let mark = parse_marker_ident(m.span());
 
@@ -228,7 +237,7 @@ pub fn parser(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 impl Case {
-    fn to_tokens<'a, I>(input: &syn::Expr, output: &syn::Type, mut cases: I) -> TokenStream2
+    fn to_tokens<'a, I>(context: &Context, mut cases: I) -> TokenStream2
         where I: Iterator<Item = &'a Case>
     {
         let this = match cases.next() {
@@ -236,6 +245,7 @@ impl Case {
             Some(case) => case
         };
 
+        let (input, output) = (&context.input, &context.output);
         let mut transformer = ParserTransformer::new(input.clone(), output.clone());
         let mut case_expr = this.expr.clone();
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
@@ -265,7 +275,7 @@ impl Case {
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(input, output, cases);
+                let rest_tokens = Case::to_tokens(context, cases);
 
                 quote_spanned! { this.span =>
                     #(
@@ -283,7 +293,7 @@ impl Case {
 
 impl Switch {
     fn to_tokens(&self) -> TokenStream2 {
-        Case::to_tokens(&self.input, &self.output, self.cases.iter())
+        Case::to_tokens(&self.context, self.cases.iter())
     }
 }
 
