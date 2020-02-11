@@ -103,7 +103,7 @@ fn test_window_termination() {
     assert!(result.is_err());
 
     let result = take_some_while_window(&mut Text::from("aa"), 2, |_| false);
-    assert_eq!(result.unwrap(), "");
+    assert!(result.is_err());
 
     let result = take_while_window(&mut Text::from("aa"), 2, |_| true);
     assert_eq!(result.unwrap(), "a");
@@ -116,4 +116,7 @@ fn test_window_termination() {
 
     let result = take_some_while_window(&mut Text::from("aaab"), 2, |&s| s == "aa");
     assert_eq!(result.unwrap(), "aa");
+
+    let result = take_while_some_window(&mut Text::from("aa"), 2, |_| false);
+    assert_eq!(result.unwrap(), "");
 }

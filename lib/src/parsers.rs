@@ -247,10 +247,25 @@ pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::M
 }
 
 /// Consumes tokens while `cond` matches on a window of tokens of size `n` and
-/// returns them. Fails if there aren't at least `n` tokens, otherwise always
-/// succeeds. If no tokens match, the result will be empty.
+/// returns them. Fails if there no tokens match, otherwise returns all of the
+/// tokens before the first failure.
 #[parser(raw)]
 pub fn take_some_while_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+    where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
+{
+    let result = take_while_window(input, n, f)?;
+    if result.is_empty() {
+        return Err(ParseError::new(Expected::Slice(None, None)));
+    }
+
+    Ok(result)
+}
+
+/// Consumes tokens while `cond` matches on a window of tokens of size `n` and
+/// returns them. Fails if there aren't at least `n` tokens, otherwise always
+/// otherwise always succeeds. If no tokens match, the result will be empty.
+#[parser(raw)]
+pub fn take_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
     if !input.has(n) {
@@ -258,6 +273,20 @@ pub fn take_some_while_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::
     }
 
     take_while_window(input, n, f)
+}
+
+/// Consumes tokens while `cond` matches on a window of tokens of size `n` and
+/// returns them. Fails if there aren't at least `n` tokens or if no tokens
+/// match, otherwise returns all of the tokens before the first failure.
+#[parser(raw)]
+pub fn take_some_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+    where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
+{
+    if !input.has(n) {
+        return Err(ParseError::new(Expected::Slice(None, None)));
+    }
+
+    take_some_while_window(input, n, f)
 }
 
 /// Consumes tokens while `cond` matches on a window of tokens of size `n` and
