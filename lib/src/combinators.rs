@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::collections::{HashMap, BTreeMap};
 
-use crate::input::{Input, Token, Result};
+use crate::input::{Input, Rewind, Token, Result};
 use crate::macros::parser;
 use crate::parsers::*;
 
@@ -76,7 +76,7 @@ pub fn surrounded<I, O, F, P>(input: &mut I, mut p: P, mut f: F) -> Result<O, I>
 }
 
 /// Parses as many `p` as possible until EOF is reached, collecting them into a
-/// `C`. `C` may be empty.
+/// `C`. Fails if `p` every fails. `C` may be empty.
 #[parser(raw)]
 pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
     where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
@@ -92,7 +92,7 @@ pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
 }
 
 /// Parses as many `p` as possible until EOF is reached, collecting them into a
-/// `C`. `C` is not allowed to be empty.
+/// `C`. Fails if `p` ever fails. `C` is not allowed to be empty.
 #[parser(raw)]
 pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
     where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
@@ -104,6 +104,36 @@ pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
             return Ok(collection);
         }
     }
+}
+
+/// Parses as many `p` as possible until EOF is reached or `p` fails, collecting
+/// them into a `C`. `C` may be empty.
+#[parser(raw)]
+pub fn try_collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
+    where C: Collection<Item=O>, I: Input + Rewind, P: FnMut(&mut I) -> Result<O, I>
+{
+    let mut collection = C::new();
+    loop {
+        if eof(input).is_ok() {
+            return Ok(collection);
+        }
+
+        // FIXME: We should be able to call `parse_marker!` here.
+        let start = input.mark(&crate::input::ParserInfo {
+            name: "try_collect",
+            raw: true
+        });
+
+        match p(input) {
+            Ok(val) => collection.add(val),
+            Err(_) => {
+                input.rewind_to(&start);
+                break;
+            }
+        }
+    }
+
+    Ok(collection)
 }
 
 /// Parses many `separator` delimited `p`s, the entire collection of which must

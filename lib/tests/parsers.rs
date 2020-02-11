@@ -99,7 +99,7 @@ fn test_window_termination() {
     let result = take_while_window(&mut Text::from("aa"), 2, |_| false);
     assert_eq!(result.unwrap(), "");
 
-    let result = take_some_while_window(&mut Text::from("a"), 2, |_| false);
+    let result = take_some_while_some_window(&mut Text::from("a"), 2, |_| false);
     assert!(result.is_err());
 
     let result = take_some_while_window(&mut Text::from("aa"), 2, |_| false);
