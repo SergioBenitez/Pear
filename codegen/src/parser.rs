@@ -106,7 +106,7 @@ impl syn::parse::Parse for CallPattern {
 impl Spanned for CallPattern {
     fn span(&self) -> Span {
         match self.name {
-            Some(ref name) => name.span().unstable().join(self.expr.span()).unwrap(),
+            Some(ref name) => name.span().unstable().join(self.expr.span()).unwrap_or_else(|| self.expr.span()),
             None => self.expr.span()
         }
     }
@@ -207,7 +207,7 @@ impl Parse for Case {
         pattern.validate()?;
         input.parse::<Token![=>]>()?;
         let expr: syn::Expr = input.parse()?;
-        let span = case_span_start.join(input.cursor().span().unstable()).unwrap();
+        let span = case_span_start.join(input.cursor().span().unstable()).unwrap_or(case_span_start);
 
         Ok(Case { pattern, expr, span })
     }
