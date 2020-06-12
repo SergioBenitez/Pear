@@ -6,4 +6,4 @@ workspace = "../../"
 [dependencies]
 pear = { path = "../../lib" }
 pear_codegen = { path = "../../codegen" }
-time = "0.1"
+time = "0.2"
