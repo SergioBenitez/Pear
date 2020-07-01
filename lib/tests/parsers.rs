@@ -11,7 +11,7 @@ fn take_until_str<'a>(input: &mut Text<'a>, s: &str) -> Result<'a, &'a str> {
 }
 
 #[parser]
-fn test_until<'a>(input: &mut Text<'a>, s: &str, r: &str) -> Result<'a, &'a str> {
+fn test_until<'a>(input: &mut Text<'a>, s: &str, r: &'a str) -> Result<'a, &'a str> {
     (take_until_str(s)?, eat_slice(r)?).0
 }
 
@@ -43,7 +43,7 @@ fn take_until_and_str<'a>(input: &mut Text<'a>, s: &str) -> Result<'a, &'a str> 
 }
 
 #[parser]
-fn test_until_and<'a>(input: &mut Text<'a>, s: &str, r: &str) -> Result<'a, &'a str> {
+fn test_until_and<'a>(input: &mut Text<'a>, s: &'a str, r: &'a str) -> Result<'a, &'a str> {
     (take_until_and_str(s)?, eat_slice(r)?).0
 }
 
@@ -69,7 +69,7 @@ fn test_while_slice_and() {
 }
 
 #[parser]
-fn test_until_window<'a>(input: &mut Text<'a>, s: &str, r: &str) -> Result<'a, &'a str> {
+fn test_until_window<'a>(input: &mut Text<'a>, s: &'a str, r: &'a str) -> Result<'a, &'a str> {
     (take_until_slice(s)?, eat_slice(r)?).0
 }
 

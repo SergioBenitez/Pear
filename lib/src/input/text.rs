@@ -42,8 +42,6 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
-impl<'a, 'b> Slice<Text<'a>> for &'b str { }
-
 // ident_impl_token!(Text<'_>);
 
 impl Rewind for Text<'_> {
