@@ -1,133 +1,5 @@
 //! Macros.
 //!
-//! Attribute Macros:
-//!
-//!   * [`#[parser]`](#parser)
-//!
-//!     The core attribute macro. Can only be applied to free functions with at
-//!     least one parameter and a return value. To typecheck, the free function
-//!     must meet the following typing requirements:
-//!
-//!     - The _first_ parameter's type `&mut I` must be a mutable reference to a
-//!       type that implements [`Input`]. This is the _input_ parameter.
-//!     - The return type must be [`Result<O, I>`] where `I` is the inner type
-//!       of the input parameter and `O` can be any type.
-//!
-//!     The following transformations are applied to the _contents_ of the
-//!     attributed function:
-//!
-//!     - The functions first parameter (of type `&mut I`) is passed as the
-//!       first parameter to every function call in the function with a posfix
-//!       `?`. That is, every function call of the form `foo(a, b, c, ...)?` is
-//!       converted to `foo(input, a, b, c, ...)?` where `input` is the input
-//!       parameter.
-//!     - The inputs to every macro whose name starts with `parse_` are prefixed
-//!       with `[PARSER_NAME, INPUT, MARKER, OUTPUT]` where `PARSER_NAME` is the
-//!       raw string literal of the functon's name, `INPUT` is the input
-//!       parameter expression, `MARKER` is the marker expression, and `OUTPUT`
-//!       is the output type. Aditionally, if the input to the macro is a valid
-//!       Rust expression, it is applied the same transformations as a function
-//!       atributed with `#[parser]`.
-//!
-//!       Declare a `parse_` macro as:
-//!
-//!       ```rust,ignore
-//!       macro_rules! parse_my_macro {
-//!           ([$n:expr; $i:expr; $m:expr; $T:ty] ..) => {
-//!               /* .. */
-//!           }
-//!       }
-//!       ```
-//!
-//!     The following transformations are applied _around_ the attributed
-//!     function:
-//!
-//!     - The [`Input::mark()`] method is called before the function executes.
-//!       The returned mark, if any, is stored on the stack.
-//!     - A return value of `O` is automatically converted (or "lifted") into a
-//!       type of [`Result<O, I>`] by wrapping it in `Ok`.
-//!     - If the function returns an `Err`, [`Input::context()`] is called with
-//!       the current mark, and the returned context, if any, is pushed into the
-//!       error via [`ParseError::push_context()`].
-//!     - The [`Input::unmark()`] method is called after the function executes,
-//!       passing in the current mark.
-//!
-//!     # Example
-//!
-//!     ```rust
-//!     use pear::input::Result;
-//!     use pear::macros::parser;
-//!     use pear::parsers::*;
-//!     #
-//!     # use pear::macros::parse_declare;
-//!     # parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
-//!
-//!     #[parser]
-//!     fn ab_in_dots<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
-//!         eat('.')?;
-//!         let inside = take_while(|&c| c == 'a' || c == 'b')?;
-//!         eat('.')?;
-//!
-//!         inside
-//!     }
-//!
-//!     # use pear::{macros::parse, input::Text};
-//!     #
-//!     let x = parse!(ab_in_dots: &mut Text::from(".abba."));
-//!     assert_eq!(x.unwrap(), "abba");
-//!
-//!     let x = parse!(ab_in_dots: &mut Text::from(".ba."));
-//!     assert_eq!(x.unwrap(), "ba");
-//!
-//!     let x = parse!(ab_in_dots: &mut Text::from("..."));
-//!     assert!(x.is_err());
-//!     ```
-//!
-//! Bang Macros:
-//!
-//!   * [`parse!`](#parse)
-//!
-//!     Runs the parser with the given name and input. After the parser returns,
-//!     runs the [`eof()`] parser. Returns the combined result.
-//!
-//!     Syntax:
-//!
-//!     ```text
-//!     parse := PARSER_NAME ':' INPUT_EXPR
-//!
-//!     PARSER_NAME := rust identifier to parser function
-//!     INPUT_EXPR := any valid rust expression which resolves to a mutable
-//!                   reference to type that implements `Input`
-//!     ```
-//!
-//!   * [`parse_context!`](#parse_context)
-//!
-//!     Invoked with no arguments: `parse_context!()`. Returns the current
-//!     context given the current mark.
-//!
-//!   * [`parse_marker!`](#parse_marker)
-//!
-//!     Invoked with no arguments: `parse_marker!()`. Returns the current mark.
-//!
-//!   * [`switch!`](#switch)
-//!
-//!     Invoked much like match, except each condition must be a parser, which is
-//!     executed, and the corresponding arm is executed only if the parser
-//!     succeeds. Once a condition succeeds, no other condition is executed.
-//!
-//!     ```rust,ignore
-//!     switch! {
-//!         parser() => expr,
-//!         x@parser1() | x@parser2(a, b, c) => expr(x),
-//!         _ => last_expr
-//!     }
-//!     ```
-//!
-//!   * [`parse_try!`](#parse_try)
-//!
-//!     Take a single parser expression as input. Runs the parser. If the parser
-//!     succeeds, returns `Some` of the result. If the parser fails, returns
-//!     `None`.
 //!
 //!   * [`parse_declare!`](#parse_declare)
 //!   * [`parse_error!`](#parse_error)
@@ -141,12 +13,28 @@
 //! [`ParseError::push_context()`]: crate::error::ParseError::push_context()
 //! [`eof()`]: crate::parsers::eof()
 
-#[doc(hidden)] pub use pear_codegen::{parser, switch};
-#[doc(hidden)] pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
-#[doc(hidden)] pub use crate::{parse_marker, parse_mark, parse_context};
-#[doc(hidden)] pub use crate::impl_show_with;
+#[doc(inline)]
+pub use pear_codegen::{parser, switch};
+#[doc(inline)]
+pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
+#[doc(inline)]
+pub use crate::{parse_marker, parse_mark, parse_context};
+#[doc(inline)]
+pub use crate::impl_show_with;
 
-#[doc(hidden)]
+/// Runs the parser with the given name and input, then [`parsers::eof()`].
+///
+/// Returns the combined result.
+///
+/// Syntax:
+///
+/// ```text
+/// parse := PARSER_NAME ( '(' (EXPR ',')* ')' )? ':' INPUT_EXPR
+///
+/// PARSER_NAME := rust identifier to parser function
+/// INPUT_EXPR := any valid rust expression which resolves to a mutable
+///               reference to type that implements `Input`
+/// ```
 #[macro_export]
 macro_rules! parse {
     ($parser:ident : $e:expr) => ({
@@ -186,7 +74,7 @@ macro_rules! _parse_declare {
     }
 }
 
-#[doc(hidden)]
+/// Returns an `Err(ParseError::new($e))`. Can used like `format!` as well.
 #[macro_export]
 macro_rules! parse_error {
     ([$n:expr; $i:expr; $m:expr; $T:ty] $err:expr) => {
@@ -197,13 +85,15 @@ macro_rules! parse_error {
     };
 }
 
-#[doc(hidden)]
+/// Returns the current marker.
+///
+/// Invoked with no arguments: `parse_marker!()`
 #[macro_export]
 macro_rules! parse_marker {
     ([$n:expr; $i:expr; $marker:expr; $T:ty]) => (*$marker);
 }
 
-#[doc(hidden)]
+/// Sets the marker to the current position.
 #[macro_export]
 macro_rules! parse_mark {
     ([$info:expr; $input:expr; $marker:expr; $T:ty]) => {{
@@ -211,7 +101,9 @@ macro_rules! parse_mark {
     }}
 }
 
-#[doc(hidden)]
+/// Returns the current context up to the current mark.
+///
+/// Invoked with no arguments: `parse_context!()`
 #[macro_export]
 macro_rules! parse_context {
     ([$n:expr; $i:expr; $marker:expr; $T:ty]) => (
@@ -219,9 +111,15 @@ macro_rules! parse_context {
     );
 }
 
-/// FIXME: This is an issue with rustc here where if `$input` is `expr`
-/// everything fails.
-#[doc(hidden)]
+/// Runs a parser returning `Some` if it succeeds or `None` otherwise.
+///
+/// Take a single parser expression as input. Without additional arguments,
+/// returns the output in `Some` on success. If called as `parse_try!(parse_expr
+/// => result_expr)`, returns `result_expr` in `Some` on success. The result of
+/// the parse expression can be pattern-binded as `parse_try!(pat@pexpr =>
+/// rexpr)`.
+// FIXME: This is an issue with rustc here where if `$input` is `expr`
+// everything fails.
 #[macro_export]
 macro_rules! parse_try {
     ([$n:expr; $input:ident; $m:expr; $T:ty] $e:expr) => {{
@@ -255,7 +153,7 @@ macro_rules! is_parse_debug {
     })
 }
 
-#[doc(hidden)]
+/// Implements the `Show` trait for $($T)+ using the existing trait `$trait`.
 #[macro_export]
 macro_rules! impl_show_with {
     ($trait:ident, $($T:ty),+) => (
@@ -267,25 +165,3 @@ macro_rules! impl_show_with {
         })+
     )
 }
-
-// #[doc(hidden)]
-// #[macro_export]
-// macro_rules! ident_impl_token {
-//     ([$($t:tt)+] $T:ty) => (
-//         impl<$($t)*> $crate::input::Token<$T> for <$T as $crate::input::Input>::Token { }
-//     );
-//     ($T:ty) => (
-//         impl $crate::input::Token<$T> for <$T as $crate::input::Input>::Token { }
-//     );
-// }
-
-// #[doc(hidden)]
-// #[macro_export]
-// macro_rules! ident_impl_slice {
-//     ([$($t:tt)+] $T:ty) => (
-//         impl<$($t)*> $crate::input::Slice<$T> for <$T as $crate::input::Input>::Slice { }
-//     );
-//     ($T:ty) => (
-//         impl $crate::input::Slice<$T> for <$T as $crate::input::Input>::Slice { }
-//     );
-// }

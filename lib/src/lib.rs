@@ -1,5 +1,3 @@
-#![cfg_attr(feature = "nightly", feature(specialization))]
-
 #![warn(rust_2018_idioms)]
 
 #[macro_use] pub mod macros;

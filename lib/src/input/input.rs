@@ -4,9 +4,9 @@ pub trait Token<I: Input>: Show + PartialEq<I::Token> { }
 
 pub trait Slice<I: Input>: Show + Length + PartialEq<I::Slice> { }
 
-impl<I: Input> Token<I> for I::Token { }
+impl<I: Input, T> Token<I> for T where T: Show + PartialEq<I::Token> { }
 
-impl<I: Input> Slice<I> for I::Slice { }
+impl<I: Input, S> Slice<I> for S where S: Show + Length + PartialEq<I::Slice> { }
 
 #[derive(Debug, Copy, Clone)]
 pub struct ParserInfo {

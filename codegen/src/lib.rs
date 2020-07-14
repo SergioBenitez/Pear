@@ -219,23 +219,6 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
     Ok(quote!(#function))
 }
 
-#[proc_macro_attribute]
-pub fn parser(
-    args: proc_macro::TokenStream,
-    input: proc_macro::TokenStream
-) -> proc_macro::TokenStream {
-    use syn::parse::Parser;
-    let args = match AttrArgs::syn_parse.parse(args) {
-        Ok(args) => args,
-        Err(e) => return Diagnostic::from(e).emit_as_tokens().into(),
-    };
-
-    match parser_attribute(input, &args) {
-        Ok(tokens) => tokens.into(),
-        Err(diag) => diag.emit_as_tokens().into(),
-    }
-}
-
 impl Case {
     fn to_tokens<'a, I>(context: &Context, mut cases: I) -> TokenStream
         where I: Iterator<Item = &'a Case>
@@ -297,6 +280,112 @@ impl Switch {
     }
 }
 
+/// The core attribute macro. Can only be applied to free functions with at
+/// least one parameter and a return value. To typecheck, the free function must
+/// meet the following typing requirements:
+///
+/// - The _first_ parameter's type `&mut I` must be a mutable reference to a
+///   type that implements [`Input`]. This is the _input_ parameter.
+/// - The return type must be [`Result<O, I>`] where `I` is the inner type
+///   of the input parameter and `O` can be any type.
+///
+/// The following transformations are applied to the _contents_ of the
+/// attributed function:
+///
+/// - The functions first parameter (of type `&mut I`) is passed as the
+///   first parameter to every function call in the function with a posfix
+///   `?`. That is, every function call of the form `foo(a, b, c, ...)?` is
+///   converted to `foo(input, a, b, c, ...)?` where `input` is the input
+///   parameter.
+/// - The inputs to every macro whose name starts with `parse_` are prefixed
+///   with `[PARSER_NAME, INPUT, MARKER, OUTPUT]` where `PARSER_NAME` is the
+///   raw string literal of the functon's name, `INPUT` is the input
+///   parameter expression, `MARKER` is the marker expression, and `OUTPUT`
+///   is the output type. Aditionally, if the input to the macro is a valid
+///   Rust expression, it is applied the same transformations as a function
+///   atributed with `#[parser]`.
+///
+///   Declare a `parse_` macro as:
+///
+///   ```rust,ignore
+///   macro_rules! parse_my_macro {
+///       ([$n:expr; $i:expr; $m:expr; $T:ty] ..) => {
+///           /* .. */
+///       }
+///   }
+///   ```
+///
+/// The following transformations are applied _around_ the attributed
+/// function:
+///
+/// - The [`Input::mark()`] method is called before the function executes.
+///   The returned mark, if any, is stored on the stack.
+/// - A return value of `O` is automatically converted (or "lifted") into a
+///   type of [`Result<O, I>`] by wrapping it in `Ok`.
+/// - If the function returns an `Err`, [`Input::context()`] is called with
+///   the current mark, and the returned context, if any, is pushed into the
+///   error via [`ParseError::push_context()`].
+/// - The [`Input::unmark()`] method is called after the function executes,
+///   passing in the current mark.
+///
+/// # Example
+///
+/// ```rust
+/// use pear::input::Result;
+/// use pear::macros::parser;
+/// use pear::parsers::*;
+/// #
+/// # use pear::macros::parse_declare;
+/// # parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
+///
+/// #[parser]
+/// fn ab_in_dots<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
+///     eat('.')?;
+///     let inside = take_while(|&c| c == 'a' || c == 'b')?;
+///     eat('.')?;
+///
+///     inside
+/// }
+///
+/// # use pear::{macros::parse, input::Text};
+/// #
+/// let x = parse!(ab_in_dots: &mut Text::from(".abba."));
+/// assert_eq!(x.unwrap(), "abba");
+///
+/// let x = parse!(ab_in_dots: &mut Text::from(".ba."));
+/// assert_eq!(x.unwrap(), "ba");
+///
+/// let x = parse!(ab_in_dots: &mut Text::from("..."));
+/// assert!(x.is_err());
+/// ```
+#[proc_macro_attribute]
+pub fn parser(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream
+) -> proc_macro::TokenStream {
+    use syn::parse::Parser;
+    let args = match AttrArgs::syn_parse.parse(args) {
+        Ok(args) => args,
+        Err(e) => return Diagnostic::from(e).emit_as_tokens().into(),
+    };
+
+    match parser_attribute(input, &args) {
+        Ok(tokens) => tokens.into(),
+        Err(diag) => diag.emit_as_tokens().into(),
+    }
+}
+
+/// Invoked much like match, except each condition must be a parser, which is
+/// executed, and the corresponding arm is executed only if the parser succeeds.
+/// Once a condition succeeds, no other condition is executed.
+///
+/// ```rust,ignore
+/// switch! {
+///     parser() => expr,
+///     x@parser1() | x@parser2(a, b, c) => expr(x),
+///     _ => last_expr
+/// }
+/// ```
 #[proc_macro]
 pub fn switch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // TODO: We lose diagnostic information by using syn's thing here. We need a
