@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene)]
-
 use std::borrow::Cow;
 
 use pear::input::{Text, Span, Expected};

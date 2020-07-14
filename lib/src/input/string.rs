@@ -1,5 +1,6 @@
 pub use crate::input::{Input, Token, Slice, ParserInfo};
 
+#[cfg(feature = "nightly")]
 impl<'a, 'b: 'a> Slice<&'a str> for &'b str { }
 
 // ident_impl_token!(&str);

@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene)]
-
 use pear::input::Text;
 use pear::{macros::*, parsers::*};
 

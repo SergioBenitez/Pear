@@ -1,8 +1,8 @@
+use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Token};
 use syn::parse::{Parse as SynParse, ParseStream as SynParseStream};
 use proc_macro2::{Span, Delimiter};
-
-use crate::diagnostics::{Diagnostic, SpanExt, Spanned};
+use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 
 pub type PResult<T> = Result<T, Diagnostic>;
 
@@ -165,7 +165,7 @@ impl Parse for Case {
         pattern.validate()?;
         input.parse::<Token![=>]>()?;
         let expr: syn::Expr = input.parse()?;
-        let span = case_span_start.join(input.cursor().span()).unwrap();
+        let span = case_span_start.join(input.cursor().span()).unwrap_or(case_span_start);
 
         Ok(Case { pattern, expr, span })
     }

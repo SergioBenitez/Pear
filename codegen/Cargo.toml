@@ -13,6 +13,4 @@ proc-macro = true
 quote = "1.0"
 proc-macro2 = { version = "1.0" }
 syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut"] }
-
-[build-dependencies]
-version_check = "0.9.1"
+proc-macro2-diagnostics = { git  = "https://github.com/SergioBenitez/proc-macro2-diagnostics.git", rev = "ef95d94" }

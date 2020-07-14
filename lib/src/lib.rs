@@ -1,5 +1,4 @@
-#![feature(proc_macro_hygiene)]
-#![feature(specialization)]
+#![cfg_attr(feature = "nightly", feature(specialization))]
 
 #![warn(rust_2018_idioms)]
 

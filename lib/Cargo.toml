@@ -13,3 +13,4 @@ pear_codegen = { version = "0.2.0-dev", path = "../codegen" }
 [features]
 default = ["color"]
 color = ["yansi"]
+nightly = []

@@ -42,6 +42,7 @@ impl<'a> From<&'a str> for Text<'a> {
     }
 }
 
+#[cfg(feature = "nightly")]
 impl<'a, 'b> Slice<Text<'a>> for &'b str { }
 
 // ident_impl_token!(Text<'_>);

@@ -1,20 +1,17 @@
 #![recursion_limit="256"]
 
-#![cfg_attr(pear_nightly, feature(proc_macro_diagnostic, proc_macro_span))]
-
 extern crate proc_macro;
 extern crate proc_macro2;
 extern crate syn;
 #[macro_use] extern crate quote;
 
 mod parser;
-mod diagnostics;
 
-use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::TokenStream;
+use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use syn::visit_mut::{self, VisitMut};
+use syn::spanned::Spanned;
 
-use crate::diagnostics::{Diagnostic, Spanned, SpanExt};
 use crate::parser::*;
 
 fn parse_marker_ident(span: proc_macro2::Span) -> syn::Ident {
@@ -121,7 +118,7 @@ fn extract_input_ident_ty(f: &syn::ItemFn) -> PResult<(syn::Ident, syn::Type)> {
 
 fn wrapping_fn_block(
     function: &syn::ItemFn,
-    scope: TokenStream2,
+    scope: TokenStream,
     args: &AttrArgs,
     ret_ty: &syn::Type,
 ) -> PResult<syn::Block> {
@@ -190,7 +187,7 @@ fn wrapping_fn_block(
 }
 
 // FIXME: Add the now missing `inline` optimization.
-fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2> {
+fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<TokenStream> {
     let input: proc_macro2::TokenStream = input.into();
     let span = input.span();
     let mut function: syn::ItemFn = syn::parse2(input).map_err(|_| {
@@ -223,21 +220,24 @@ fn parser_attribute(input: TokenStream, args: &AttrArgs) -> PResult<TokenStream2
 }
 
 #[proc_macro_attribute]
-pub fn parser(args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn parser(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream
+) -> proc_macro::TokenStream {
     use syn::parse::Parser;
     let args = match AttrArgs::syn_parse.parse(args) {
         Ok(args) => args,
-        Err(e) => return Diagnostic::from(e).emit_as_tokens(),
+        Err(e) => return Diagnostic::from(e).emit_as_tokens().into(),
     };
 
     match parser_attribute(input, &args) {
         Ok(tokens) => tokens.into(),
-        Err(diag) => diag.emit_as_tokens(),
+        Err(diag) => diag.emit_as_tokens().into(),
     }
 }
 
 impl Case {
-    fn to_tokens<'a, I>(context: &Context, mut cases: I) -> TokenStream2
+    fn to_tokens<'a, I>(context: &Context, mut cases: I) -> TokenStream
         where I: Iterator<Item = &'a Case>
     {
         let this = match cases.next() {
@@ -292,18 +292,18 @@ impl Case {
 }
 
 impl Switch {
-    fn to_tokens(&self) -> TokenStream2 {
+    fn to_tokens(&self) -> TokenStream {
         Case::to_tokens(&self.context, self.cases.iter())
     }
 }
 
 #[proc_macro]
-pub fn switch(input: TokenStream) -> TokenStream {
+pub fn switch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // TODO: We lose diagnostic information by using syn's thing here. We need a
     // way to get a SynParseStream from a TokenStream to not do that.
     use syn::parse::Parser;
     match Switch::syn_parse.parse(input) {
         Ok(switch) => switch.to_tokens().into(),
-        Err(e) => Diagnostic::from(e).emit_as_tokens(),
+        Err(e) => Diagnostic::from(e).emit_as_tokens().into(),
     }
 }
