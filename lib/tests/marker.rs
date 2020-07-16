@@ -66,34 +66,42 @@ fn resetting_context<'a>(input: &mut Text<'a>) -> Result<TwoSpans<'a>, Text<'a>>
 
 #[test]
 fn test_context() {
+    pear::debug::enable_context();
+
     let (first, second) = parse!(context: &mut Text::from("...\n..")).unwrap();
 
     assert_eq!(first, Span {
         start: (1, 1, 0),
         end: (1, 4, 3),
         snippet: Some("..."),
+        cursor: Some('\n'),
     });
 
     assert_eq!(second, Span {
         start: (1, 1, 0),
         end: (2, 3, 6),
         snippet: Some("...\n.."),
+        cursor: None,
     });
 }
 
 #[test]
 fn test_resetting_context() {
+    pear::debug::enable_context();
+
     let (first, second) = parse!(resetting_context: &mut Text::from("...\n..")).unwrap();
 
     assert_eq!(first, Span {
         start: (1, 1, 0),
         end: (1, 4, 3),
         snippet: Some("..."),
+        cursor: Some('\n'),
     });
 
     assert_eq!(second, Span {
         start: (2, 1, 4),
         end: (2, 3, 6),
         snippet: Some(".."),
+        cursor: None,
     });
 }

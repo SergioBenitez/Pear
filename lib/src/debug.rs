@@ -186,15 +186,9 @@ static DEBUG_CONTEXT: AtomicBool = AtomicBool::new(true);
 #[cfg(not(debug_assertions))]
 static DEBUG_CONTEXT: AtomicBool = AtomicBool::new(false);
 
-#[inline(always)]
-pub fn enable_context(enable: bool) {
-    DEBUG_CONTEXT.store(enable, Ordering::Release)
-}
-
-#[inline(always)]
-pub fn context_enabled() -> bool {
-    DEBUG_CONTEXT.load(Ordering::Acquire)
-}
+pub fn enable_context() { DEBUG_CONTEXT.store(true, Ordering::Release) }
+pub fn disable_context() { DEBUG_CONTEXT.store(false, Ordering::Release) }
+#[inline(always)] pub fn context_enabled() -> bool { DEBUG_CONTEXT.load(Ordering::Acquire) }
 
 // FIXME: Remove the global state with a wrapping input like the one below.
 // Major caveat: the blanket Token impls in `input` prevent a blanket input

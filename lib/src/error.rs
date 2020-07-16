@@ -15,11 +15,9 @@ pub struct ParseContext<C> {
 }
 
 impl<C, E> ParseError<C, E> {
+    #[inline(always)]
     pub fn new(error: E) -> ParseError<C, E> {
-        ParseError {
-            error: error,
-            contexts: vec![]
-        }
+        ParseError { error, contexts: vec![] }
     }
 
     pub fn push_context(&mut self, context: Option<C>, parser: ParserInfo) {

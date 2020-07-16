@@ -6,8 +6,10 @@ pub struct Span<'a> {
     pub start: (usize, usize, usize),
     /// End line/column/offset.
     pub end: (usize, usize, usize),
+    /// Where the parser was pointing.
+    pub cursor: Option<char>,
     /// Snippet between start and end.
-    pub snippet: Option<&'a str>
+    pub snippet: Option<&'a str>,
 }
 
 impl<'a> Show for Span<'a> {
@@ -22,7 +24,10 @@ impl<'a> Show for Span<'a> {
         }
 
         if let Some(snippet) = self.snippet {
-            write!(f, " {:?}", snippet)?;
+            write!(f, " \"")?;
+            for c in snippet.chars() { write!(f, "{:?}", c)?; }
+            if let Some(cursor) = self.cursor { write!(f, "{:?}", cursor)?; }
+            write!(f, "\"")?;
         } else {
             write!(f, " [EOF]")?;
         }
@@ -123,9 +128,10 @@ impl<'a> Input for Text<'a> {
     }
 
     fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
+        let cursor = self.token();
         let bytes_read = self.start.len() - self.current.len();
         let pos = if bytes_read == 0 {
-            Span { start: (1, 1, 0), end: (1, 1, 0), snippet: None }
+            Span { start: (1, 1, 0), end: (1, 1, 0), snippet: None, cursor }
         } else {
             let start_offset = *mark;
             let end_offset = bytes_read;
@@ -138,15 +144,13 @@ impl<'a> Input for Text<'a> {
             let (end_line, end_col) = line_col(to_current_str);
             let end = (end_line, end_col, bytes_read);
 
-            let snippet = if end_offset < self.start.len() {
-                Some(&self.start[start_offset..(end_offset + 1)])
-            } else if end_offset < self.start.len() {
+            let snippet = if end_offset <= self.start.len() {
                 Some(&self.start[start_offset..end_offset])
             } else {
                 None
             };
 
-            Span { start, end, snippet }
+            Span { start, end, cursor, snippet }
         };
 
         Some(pos)

@@ -7,3 +7,10 @@ edition = "2018"
 [dependencies]
 pear = { path = "../../lib" }
 pear_codegen = { path = "../../codegen" }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "json"
+harness = false
