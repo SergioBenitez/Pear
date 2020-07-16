@@ -1,53 +1,16 @@
-use std::hash::Hash;
-use std::collections::{HashMap, BTreeMap};
+use std::default::Default;
 
 use crate::input::{Input, Rewind, Token, Result};
 use crate::macros::parser;
 use crate::parsers::*;
 
-pub trait Collection {
-    type Item;
-    fn new() -> Self;
-    fn add(&mut self, item: Self::Item);
-}
-
-impl<T> Collection for Vec<T> {
-    type Item = T;
-
-    fn new() -> Self {
-        vec![]
-    }
-
-    fn add(&mut self, item: Self::Item) {
-        self.push(item);
+pub trait Collection<A>: Default + Extend<A> {
+    fn push(&mut self, item: A) {
+        self.extend(Some(item))
     }
 }
 
-impl<K: Eq + Hash, V> Collection for HashMap<K, V> {
-    type Item = (K, V);
-
-    fn new() -> Self {
-        HashMap::new()
-    }
-
-    fn add(&mut self, item: Self::Item) {
-        let (k, v) = item;
-        self.insert(k, v);
-    }
-}
-
-impl<K: Ord, V> Collection for BTreeMap<K, V> {
-    type Item = (K, V);
-
-    fn new() -> Self {
-        BTreeMap::new()
-    }
-
-    fn add(&mut self, item: Self::Item) {
-        let (k, v) = item;
-        self.insert(k, v);
-    }
-}
+impl<A, T: Default + Extend<A>> Collection<A> for T {  }
 
 /// Parses `p` until `p` fails, returning the last successful `p`.
 #[parser(raw)]
@@ -79,15 +42,15 @@ pub fn surrounded<I, O, F, P>(input: &mut I, mut p: P, mut f: F) -> Result<O, I>
 /// `C`. Fails if `p` every fails. `C` may be empty.
 #[parser(raw)]
 pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
-    where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
+    where C: Collection<O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
 {
-    let mut collection = C::new();
+    let mut collection = C::default();
     loop {
         if eof(input).is_ok() {
             return Ok(collection);
         }
 
-        collection.add(p(input)?);
+        collection.push(p(input)?);
     }
 }
 
@@ -95,11 +58,11 @@ pub fn collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
 /// `C`. Fails if `p` ever fails. `C` is not allowed to be empty.
 #[parser(raw)]
 pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
-    where C: Collection<Item=O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
+    where C: Collection<O>, I: Input, P: FnMut(&mut I) -> Result<O, I>
 {
-    let mut collection = C::new();
+    let mut collection = C::default();
     loop {
-        collection.add(p(input)?);
+        collection.push(p(input)?);
         if eof(input).is_ok() {
             return Ok(collection);
         }
@@ -110,9 +73,9 @@ pub fn collect_some<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
 /// them into a `C`. `C` may be empty.
 #[parser(raw)]
 pub fn try_collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
-    where C: Collection<Item=O>, I: Input + Rewind, P: FnMut(&mut I) -> Result<O, I>
+    where C: Collection<O>, I: Input + Rewind, P: FnMut(&mut I) -> Result<O, I>
 {
-    let mut collection = C::new();
+    let mut collection = C::default();
     loop {
         if eof(input).is_ok() {
             return Ok(collection);
@@ -125,7 +88,7 @@ pub fn try_collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
         });
 
         match p(input) {
-            Ok(val) => collection.add(val),
+            Ok(val) => collection.push(val),
             Err(_) => {
                 input.rewind_to(&start);
                 break;
@@ -148,7 +111,7 @@ pub fn delimited_collect<C, I, T, S, O, P>(
     seperator: S,
     end: T,
 ) -> Result<C, I>
-    where C: Collection<Item=O>,
+    where C: Collection<O>,
           I: Input,
           T: Token<I> + Clone,
           S: Into<Option<T>>,
@@ -157,13 +120,13 @@ pub fn delimited_collect<C, I, T, S, O, P>(
     eat(input, start)?;
 
     let seperator = seperator.into();
-    let mut collection = C::new();
+    let mut collection = C::default();
     loop {
         if eat(input, end.clone()).is_ok() {
             break;
         }
 
-        collection.add(item(input)?);
+        collection.push(item(input)?);
 
         if let Some(seperator) = seperator.clone() {
             if eat(input, seperator).is_err(){
@@ -185,14 +148,14 @@ pub fn series<C, I, S, O, P>(
     mut item: P,
     seperator: S,
 ) -> Result<C, I>
-    where C: Collection<Item=O>,
+    where C: Collection<O>,
           I: Input,
           S: Token<I> + Clone,
           P: FnMut(&mut I) -> Result<O, I>,
 {
-    let mut collection = C::new();
+    let mut collection = C::default();
     loop {
-        collection.add(item(input)?);
+        collection.push(item(input)?);
         if eat(input, seperator.clone()).is_err() {
             break;
         }
@@ -211,16 +174,16 @@ pub fn trailing_series<C, I, S, O, P>(
     mut item: P,
     seperator: S,
 ) -> Result<C, I>
-    where C: Collection<Item=O>,
+    where C: Collection<O>,
           I: Input,
           S: Token<I> + Clone,
           P: FnMut(&mut I) -> Result<O, I>,
 {
-    let mut collection = C::new();
+    let mut collection = C::default();
     let mut have_some = false;
     loop {
         match item(input) {
-            Ok(item) => collection.add(item),
+            Ok(item) => collection.push(item),
             Err(e) => if have_some {
                 break
             } else {
@@ -249,13 +212,13 @@ pub fn prefixed_series<C, I, T, O, P>(
     item: P,
     seperator: T,
 ) -> Result<C, I>
-    where C: Collection<Item=O>,
+    where C: Collection<O>,
           I: Input,
           T: Token<I> + Clone,
           P: FnMut(&mut I) -> Result<O, I>,
 {
     if eat(input, prefix).is_err() {
-        return Ok(C::new());
+        return Ok(C::default());
     }
 
     series(input, item, seperator)
