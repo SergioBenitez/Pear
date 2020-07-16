@@ -7,10 +7,12 @@ extern crate syn;
 
 mod parser;
 
-use proc_macro2::TokenStream;
-use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
+use syn::parse::Parser;
 use syn::visit_mut::{self, VisitMut};
 use syn::spanned::Spanned;
+
+use proc_macro2::TokenStream;
+use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 
 use crate::parser::*;
 
@@ -142,14 +144,11 @@ fn wrapping_fn_block(
         ))
     };
 
-    let rewind = args.rewind.map(|span| quote_spanned! { span =>
+    let rewind_expr = |span| quote_spanned! { span =>
         <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
-    });
+    };
 
-    let peek = args.peek.map(|span| quote_spanned! { span =>
-        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
-    });
-
+    let (rewind, peek) = (args.rewind.map(rewind_expr), args.peek.map(rewind_expr));
     let new_block_tokens = {
         let (name, raw) = (&function.sig.ident, args.raw.is_some());
         let name_str = name.to_string();
@@ -162,12 +161,16 @@ fn wrapping_fn_block(
 
             let mut ___mark = #scope::input::Input::mark(#input_ident, &___info);
             let mut ___res: #ret_ty = #result_map(&___info, &mut ___mark);
-            if let Err(ref mut ___e) = ___res {
-                let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
-                ___e.push_context(___ctxt, ___info);
-                #rewind
-            } else {
-                #peek
+            match ___res {
+                Ok(_) => { #peek },
+                // FIXME: This adds quite a bit of overhead, even when disabled!
+                // Should we have a `pear-lite`? CFG's to enable/disable?
+                Err(ref mut ___e) if #scope::debug::context_enabled() => {
+                    let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
+                    ___e.push_context(___ctxt, ___info);
+                    #rewind
+                },
+                Err(_) => { #rewind },
             }
 
             // FIXME: Get rid of this!
@@ -186,7 +189,6 @@ fn wrapping_fn_block(
         .map_err(|e| function.span().error(format!("bad function: {}", e)).into())
 }
 
-// FIXME: Add the now missing `inline` optimization.
 fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<TokenStream> {
     let input: proc_macro2::TokenStream = input.into();
     let span = input.span();
@@ -214,7 +216,9 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
     }
 
     let scope = match args.raw.is_some() { true => quote!(crate), false => quote!(::pear) };
+    let inline = syn::Attribute::parse_outer.parse2(quote!(#[inline])).unwrap();
     function.block = Box::new(wrapping_fn_block(&function, scope, args, &ret_ty)?);
+    function.attrs.extend(inline);
 
     Ok(quote!(#function))
 }
@@ -262,7 +266,7 @@ impl Case {
 
                 quote_spanned! { this.span =>
                     #(
-                        #prefix let Ok(#name) = #call_expr {
+                        #prefix let Some(#name) = #call_expr.ok() {
                             #case_expr
                         }
                      )* else {
@@ -363,7 +367,6 @@ pub fn parser(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream
 ) -> proc_macro::TokenStream {
-    use syn::parse::Parser;
     let args = match AttrArgs::syn_parse.parse(args) {
         Ok(args) => args,
         Err(e) => return Diagnostic::from(e).emit_as_tokens().into(),
@@ -390,7 +393,6 @@ pub fn parser(
 pub fn switch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // TODO: We lose diagnostic information by using syn's thing here. We need a
     // way to get a SynParseStream from a TokenStream to not do that.
-    use syn::parse::Parser;
     match Switch::syn_parse.parse(input) {
         Ok(switch) => switch.to_tokens().into(),
         Err(e) => Diagnostic::from(e).emit_as_tokens().into(),

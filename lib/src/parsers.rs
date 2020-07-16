@@ -19,8 +19,14 @@ fn expected_token<T, A, I>(
     // let expected = Expected::Token(token.map(|t| t.into_token()), input.token());
     // Err(ParseError::expected(expected))
 
-    let string = token.map(|t| (&t as &dyn Show).to_string());
-    let expected = Expected::Token(string, input.token());
+    // FIXME: This adds quite a bit of overhead, even when disabled!
+    let expected = if crate::debug::context_enabled() {
+        let string = token.map(|t| (&t as &dyn Show).to_string());
+        Expected::Token(string, input.token())
+    } else {
+        Expected::Token(None, None)
+    };
+
     Err(ParseError::new(expected))
 }
 
@@ -36,8 +42,14 @@ fn expected_slice<S, A, I>(
     // let expected = Expected::Slice(Some(slice.into_slice()), input.slice(len));
     // Err(ParseError::expected(expected))
 
-    let string = (&slice as &dyn Show).to_string();
-    let expected = Expected::Slice(Some(string), input.slice(slice.len()));
+    // FIXME: This adds quite a bit of overhead, even when disabled!
+    let expected = if crate::debug::context_enabled() {
+        let string = (&slice as &dyn Show).to_string();
+        Expected::Slice(Some(string), input.slice(slice.len()))
+    } else {
+        Expected::Slice(None, None)
+    };
+
     Err(ParseError::new(expected))
 }
 

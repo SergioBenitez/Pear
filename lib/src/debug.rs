@@ -178,6 +178,24 @@ pub fn parser_exit(parser: &ParserInfo, success: bool, ctxt: Option<&dyn Show>) 
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(debug_assertions)]
+static DEBUG_CONTEXT: AtomicBool = AtomicBool::new(true);
+
+#[cfg(not(debug_assertions))]
+static DEBUG_CONTEXT: AtomicBool = AtomicBool::new(false);
+
+#[inline(always)]
+pub fn enable_context(enable: bool) {
+    DEBUG_CONTEXT.store(enable, Ordering::Release)
+}
+
+#[inline(always)]
+pub fn context_enabled() -> bool {
+    DEBUG_CONTEXT.load(Ordering::Acquire)
+}
+
 // FIXME: Remove the global state with a wrapping input like the one below.
 // Major caveat: the blanket Token impls in `input` prevent a blanket input
 // here.

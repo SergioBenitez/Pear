@@ -5,6 +5,7 @@ use crate::macros::parser;
 use crate::parsers::*;
 
 pub trait Collection<A>: Default + Extend<A> {
+    #[inline(always)]
     fn push(&mut self, item: A) {
         self.extend(Some(item))
     }

@@ -28,9 +28,7 @@
 //     parser known it doesn't need it?
 //
 // TODO
-// * Check if we can remove overlapping impls -> remove use of specialization.
 // * Print parser arguments in debug/error output.
-// * Bonus: Migrate to syn 1.0, also in devise.
 
 pub trait Show {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
@@ -84,7 +82,7 @@ macro_rules! impl_with_tick_display {
         impl Show for $T {
             #[inline(always)]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "`{}`", self)
+                write!(f, "{:?}", self)
             }
         }
     )*)

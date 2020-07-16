@@ -3,21 +3,21 @@ use crate::input::{Show, ParserInfo};
 pub use crate::expected::Expected;
 
 #[derive(Debug, Clone)]
-pub struct ParseContext<C> {
-    pub parser: ParserInfo,
-    pub context: Option<C>,
-}
-
-#[derive(Debug, Clone)]
 pub struct ParseError<C, E> {
     pub error: E,
     pub contexts: Vec<ParseContext<C>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ParseContext<C> {
+    pub parser: ParserInfo,
+    pub context: Option<C>,
+}
+
 impl<C, E> ParseError<C, E> {
     pub fn new(error: E) -> ParseError<C, E> {
         ParseError {
-            error: error.into(),
+            error: error,
             contexts: vec![]
         }
     }

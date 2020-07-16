@@ -15,12 +15,14 @@ pub trait AsResult<T, C, E> {
 }
 
 impl<T, C, E> AsResult<T, C, E> for T {
+    #[inline(always)]
     fn as_result(self) -> Result<T, C, E> {
         Ok(self)
     }
 }
 
 impl<T, C, E> AsResult<T, C, E> for Result<T, C, E> {
+    #[inline(always)]
     fn as_result(self) -> Result<T, C, E> {
         self
     }

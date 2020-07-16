@@ -159,8 +159,8 @@ a=1
 fn main() {
     // let start = time::precise_time_ns();
     // let result = parse!(ini: &mut INI_STRING);
-    // let result = parse!(ini: &mut pear::input::Text::from(INI_STRING));
-    let result = parse!(ini: &mut INI_STRING);
+    let result = parse!(ini: &mut pear::input::Text::from(INI_STRING));
+    // let result = parse!(ini: &mut INI_STRING);
     // let end = time::precise_time_ns();
 
     match result {

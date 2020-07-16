@@ -23,6 +23,8 @@ impl<'a> Show for Span<'a> {
 
         if let Some(snippet) = self.snippet {
             write!(f, " {:?}", snippet)?;
+        } else {
+            write!(f, " [EOF]")?;
         }
 
         Ok(())
@@ -36,7 +38,6 @@ pub struct Text<'a> {
 }
 
 impl<'a> From<&'a str> for Text<'a> {
-    #[inline(always)]
     fn from(start: &'a str) -> Text<'a> {
         Text { start: start, current: start }
     }
@@ -137,7 +138,14 @@ impl<'a> Input for Text<'a> {
             let (end_line, end_col) = line_col(to_current_str);
             let end = (end_line, end_col, bytes_read);
 
-            let snippet = Some(&self.start[start_offset..end_offset]);
+            let snippet = if end_offset < self.start.len() {
+                Some(&self.start[start_offset..(end_offset + 1)])
+            } else if end_offset < self.start.len() {
+                Some(&self.start[start_offset..end_offset])
+            } else {
+                None
+            };
+
             Span { start, end, snippet }
         };
 

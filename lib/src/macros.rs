@@ -137,19 +137,15 @@ macro_rules! parse_try {
 #[macro_export]
 macro_rules! is_parse_debug {
     () => ({
-        #[cfg(debug_assertions)]
-        let result = ::std::env::var("PARSE_DEBUG").is_ok();
-        #[cfg(not(debug_assertions))]
-        let result = false;
-        result
+        #[cfg(not(debug_assertions))] { false }
+        #[cfg(debug_assertions)] { ::std::env::var("PARSE_DEBUG").is_ok() }
     });
 
     ($kind:expr) => ({
-        #[cfg(debug_assertions)]
-        let result = ::std::env::var("PARSE_DEBUG").map(|v| v == $kind).unwrap_or(false);
-        #[cfg(not(debug_assertions))]
-        let result = false;
-        result
+        #[cfg(not(debug_assertions))] { false }
+        #[cfg(debug_assertions)] {
+            ::std::env::var("PARSE_DEBUG").map(|v| v == $kind).unwrap_or(false)
+        }
     })
 }
 
