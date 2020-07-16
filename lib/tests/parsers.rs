@@ -1,4 +1,4 @@
-use pear::input::Text;
+use pear::input::{Text, Cursor, Extent};
 use pear::{macros::*, parsers::*};
 
 type Result<'a, T> = pear::input::Result<T, Text<'a>>;
@@ -117,4 +117,43 @@ fn test_window_termination() {
 
     let result = take_while_some_window(&mut Text::from("aa"), 2, |_| false);
     assert_eq!(result.unwrap(), "");
+}
+
+type CResult<'a, T> = pear::input::Result<Extent<T>, Cursor<&'a str>>;
+
+#[parser]
+fn take_until_cursor_str<'a>(input: &mut Cursor<&'a str>, s: &str) -> CResult<'a, &'a str> {
+    take_while_slice(|&slice| !slice.ends_with(s))?
+}
+
+#[test]
+fn test_cursor() {
+    let input = "abchello";
+    let result = take_until_cursor_str(&mut Cursor::from(input), "hell");
+    let extent = result.unwrap();
+    assert_eq!(extent, "abchel");
+    assert_eq!(extent.start, 0);
+    assert_eq!(extent.end, 6);
+    assert_eq!(extent, &input[extent.start..extent.end]);
+
+    let input = "hellothisishe";
+    let mut cursor = Cursor::from(input);
+
+    peek_slice(&mut cursor, "hello").unwrap();
+
+    let extent = eat_any(&mut cursor).unwrap();
+    assert_eq!(extent, 'h');
+
+    let extent = take_until_cursor_str(&mut cursor, "this").unwrap();
+    assert_eq!(extent, "ellothi");
+    assert_eq!(extent, &input[extent.start..extent.end]);
+
+    let extent = take_until_cursor_str(&mut cursor, "is").unwrap();
+    assert_eq!(extent, "si");
+    assert_eq!(extent, &input[extent.start..extent.end]);
+
+    println!("{:?}", cursor);
+    let extent = take_while(&mut cursor, |_| true).unwrap();
+    assert_eq!(extent, "she");
+    assert_eq!(extent, &input[extent.start..extent.end]);
 }
