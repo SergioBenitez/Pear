@@ -60,6 +60,22 @@ impl<T: Show> Show for [T] {
     }
 }
 
+macro_rules! impl_for_slice_len {
+    ($($n:expr),*) => ($(
+        impl<T: Show> Show for [T; $n] {
+            #[inline(always)]
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                Show::fmt(&self[..], f)
+            }
+        }
+    )*)
+}
+
+impl_for_slice_len!(
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+);
+
 impl<T: Show> Show for Vec<T> {
     #[inline(always)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

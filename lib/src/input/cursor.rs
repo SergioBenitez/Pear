@@ -53,6 +53,21 @@ impl<T: PartialEq> PartialEq<Extent<&[T]>> for &[T] {
     }
 }
 
+macro_rules! impl_for_slice_len {
+    ($($n:expr),*) => ($(
+        impl<T: PartialEq> PartialEq<Extent<&[T]>> for &[T; $n] {
+            fn eq(&self, other: &Extent<&[T]>) -> bool {
+                &other.values[..] == *self
+            }
+        }
+    )*)
+}
+
+impl_for_slice_len!(
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+);
+
 impl<T> Length for Extent<T> {
     fn len(&self) -> usize {
         self.end - self.start
