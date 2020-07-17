@@ -251,7 +251,7 @@ pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::M
         }
     }
 
-    input.rewind_to(&start);
+    input.rewind_to(start);
     Ok(input.take(|_| match tokens > 0 {
         true => { tokens -= 1; true },
         false => false

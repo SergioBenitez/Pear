@@ -16,7 +16,7 @@ pub struct ParserInfo {
 
 pub trait Rewind: Sized + Input {
     /// Resets `self` to the position identified by `marker`.
-    fn rewind_to(&mut self, marker: &Self::Marker);
+    fn rewind_to(&mut self, marker: Self::Marker);
 }
 
 pub trait Input: Sized {

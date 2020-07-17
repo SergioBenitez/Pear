@@ -145,7 +145,7 @@ fn wrapping_fn_block(
     };
 
     let rewind_expr = |span| quote_spanned! { span =>
-        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, &___mark);
+        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, ___mark);
     };
 
     let (rewind, peek) = (args.rewind.map(rewind_expr), args.peek.map(rewind_expr));

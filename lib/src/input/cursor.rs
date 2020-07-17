@@ -267,7 +267,7 @@ impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
 impl<T: Indexable + Show + Length + PartialEq> Rewind for Cursor<T>
     where T::One: Show + PartialEq
 {
-    fn rewind_to(&mut self, marker: &Self::Marker) {
-        self.items = self.start.slice(*marker..).unwrap();
+    fn rewind_to(&mut self, marker: Self::Marker) {
+        self.items = self.start.slice(marker..).unwrap();
     }
 }

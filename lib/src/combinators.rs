@@ -91,7 +91,7 @@ pub fn try_collect<C, I, O, P>(input: &mut I, mut p: P) -> Result<C, I>
         match p(input) {
             Ok(val) => collection.push(val),
             Err(_) => {
-                input.rewind_to(&start);
+                input.rewind_to(start);
                 break;
             }
         }

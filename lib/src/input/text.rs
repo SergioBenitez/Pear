@@ -49,8 +49,8 @@ impl<'a> From<&'a str> for Text<'a> {
 }
 
 impl Rewind for Text<'_> {
-    fn rewind_to(&mut self, marker: &Self::Marker) {
-        self.current = &self.start[*marker..];
+    fn rewind_to(&mut self, marker: Self::Marker) {
+        self.current = &self.start[marker..];
     }
 }
 
