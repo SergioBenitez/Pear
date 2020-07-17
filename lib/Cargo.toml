@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 yansi = { version = "0.5", optional = true }
 pear_codegen = { version = "0.2.0-dev", path = "../codegen" }
+inlinable_string = "0.1"
 
 [features]
 default = ["color"]

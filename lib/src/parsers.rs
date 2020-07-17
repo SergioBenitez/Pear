@@ -8,48 +8,33 @@ use crate::macros::parser;
 // //   - quoted_string(allowed): '"' allowed* '"'
 // //   - escaped string, with some way to configure escapes
 
-#[inline(always)]
+#[inline]
 fn expected_token<T, A, I>(
     input: &mut I,
     token: Option<T>
 ) -> Result<A, I>
     where T: Token<I>, I: Input
 {
-    // FIXME(show)
-    // let expected = Expected::Token(token.map(|t| t.into_token()), input.token());
-    // Err(ParseError::expected(expected))
-
-    // FIXME: This adds quite a bit of overhead, even when disabled!
-    let expected = if crate::debug::context_enabled() {
-        let string = token.map(|t| (&t as &dyn Show).to_string());
-        Expected::Token(string, input.token())
-    } else {
-        Expected::Token(None, None)
-    };
-
+    // FIXME: This adds quite a bit of overhead. By my benchmark, 4x! If we
+    // specialization, we could try to convert `token` into an `I::Token`, and
+    // failing that, store it in a slice as is done here. Then there's the other
+    // idea of being able to tell a parser that the error is just going to be
+    // thrown away, so don't generate it.
+    let string = token.map(|t| iformat!("{}", &t as &dyn Show));
+    let expected = Expected::Token(string, input.token());
     Err(ParseError::new(expected))
 }
 
-#[inline(always)]
+#[inline]
 fn expected_slice<S, A, I>(
     input: &mut I,
     slice: S
 ) -> Result<A, I>
     where S: Slice<I>, I: Input
 {
-    // FIXME(show)
-    // let len = slice.len();
-    // let expected = Expected::Slice(Some(slice.into_slice()), input.slice(len));
-    // Err(ParseError::expected(expected))
-
-    // FIXME: This adds quite a bit of overhead, even when disabled!
-    let expected = if crate::debug::context_enabled() {
-        let string = (&slice as &dyn Show).to_string();
-        Expected::Slice(Some(string), input.slice(slice.len()))
-    } else {
-        Expected::Slice(None, None)
-    };
-
+    // FIXME: This adds quite a bit of overhead!
+    let string = iformat!("{}", &slice as &dyn Show);
+    let expected = Expected::Slice(Some(string), input.slice(slice.len()));
     Err(ParseError::new(expected))
 }
 

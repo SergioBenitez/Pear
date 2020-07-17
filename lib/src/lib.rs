@@ -1,5 +1,7 @@
 #![warn(rust_2018_idioms)]
 
+#[doc(hidden)] pub use inlinable_string;
+
 #[macro_use] pub mod macros;
 pub mod input;
 pub mod result;

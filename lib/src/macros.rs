@@ -74,6 +74,21 @@ macro_rules! _parse_declare {
     }
 }
 
+/// Like `format!` but tries to inline the string.
+#[doc(hiden)]
+#[macro_export]
+macro_rules! iformat {
+    ($fmt:expr, $($arg:tt)*) => ({
+        #[allow(unused_imports)]
+        use std::fmt::Write;
+        #[allow(unused_imports)]
+        use $crate::inlinable_string::{InlinableString, StringExt};
+        let mut string = $crate::inlinable_string::InlinableString::new();
+        let _ = write!(string, $fmt, $($arg)*);
+        string
+    })
+}
+
 /// Returns an `Err(ParseError::new($e))`. Can used like `format!` as well.
 #[macro_export]
 macro_rules! parse_error {
@@ -81,7 +96,7 @@ macro_rules! parse_error {
         Err($crate::error::ParseError::new($err))
     };
     ([$n:expr; $i:expr; $m:expr; $T:ty] $fmt:expr, $($arg:tt)*) => {
-        parse_error!([$n; $i; $m; $T] format!($fmt, $($arg)*))
+        parse_error!([$n; $i; $m; $T] $crate::iformat!($fmt, $($arg)*))
     };
 }
 

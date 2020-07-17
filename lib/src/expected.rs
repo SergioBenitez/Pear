@@ -1,39 +1,84 @@
 use std::fmt;
-use std::borrow::Cow;
+
+use inlinable_string::InlinableString;
 
 use crate::input::Show;
 
-pub enum Expected<Token, Slice> {
-    // Token(Option<I::Token>, Option<I::Token>),
-    // Slice(Option<I::Slice>, Option<I::Slice>),
-    Token(Option<String>, Option<Token>),
-    Slice(Option<String>, Option<Slice>),
-    Eof(Option<Token>),
-    Other(Cow<'static, str>),
+#[derive(Clone)]
+pub enum CowInlineString {
+    Borrowed(&'static str),
+    Inline(InlinableString)
 }
 
-impl<T: ToOwned, S: ?Sized + ToOwned> Expected<T, &S> {
-    pub fn into_owned(self) -> Expected<T::Owned, S::Owned> {
+impl std::ops::Deref for CowInlineString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            CowInlineString::Borrowed(s) => s,
+            CowInlineString::Inline(s) => s,
+        }
+    }
+}
+
+impl std::fmt::Display for CowInlineString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        str::fmt(self, f)
+    }
+}
+
+impl std::fmt::Debug for CowInlineString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        str::fmt(self, f)
+    }
+}
+
+pub enum Expected<Token, Slice> {
+    Token(Option<InlinableString>, Option<Token>),
+    Slice(Option<InlinableString>, Option<Slice>),
+    Eof(Option<Token>),
+    Other(CowInlineString),
+}
+
+impl<Token, Slice> Expected<Token, Slice> {
+    pub fn map<FT, FS, T, S>(self, t: FT, s: FS) -> Expected<T, S>
+        where FT: Fn(Token) -> T, FS: Fn(Slice) -> S
+    {
         use Expected::*;
 
         match self {
-            Token(e, v) => Token(e, v.map(|v| v.to_owned())),
-            Slice(e, v) => Slice(e, v.map(|v| v.to_owned())),
-            Eof(v) => Eof(v.map(|v| v.to_owned())),
+            Token(e, v) => Token(e, v.map(t)),
+            Slice(e, v) => Slice(e, v.map(s)),
+            Eof(v) => Eof(v.map(t)),
             Other(v) => Other(v),
         }
     }
 }
 
+impl<T: ToOwned, S: ?Sized + ToOwned> Expected<T, &S> {
+    pub fn into_owned(self) -> Expected<T::Owned, S::Owned> {
+        self.map(|t| t.to_owned(), |s| s.to_owned())
+    }
+}
+
 impl<T, S> From<String> for Expected<T, S> {
+    #[inline(always)]
     fn from(string: String) -> Expected<T, S> {
-        Expected::Other(string.into())
+        Expected::Other(CowInlineString::Inline(InlinableString::from(string)))
+    }
+}
+
+#[doc(hidden)]
+impl<T, S> From<InlinableString> for Expected<T, S> {
+    #[inline(always)]
+    fn from(string: InlinableString) -> Expected<T, S> {
+        Expected::Other(CowInlineString::Inline(string))
     }
 }
 
 impl<T, S> From<&'static str> for Expected<T, S> {
+    #[inline(always)]
     fn from(string: &'static str) -> Expected<T, S> {
-        Expected::Other(string.into())
+        Expected::Other(CowInlineString::Borrowed(string))
     }
 }
 
