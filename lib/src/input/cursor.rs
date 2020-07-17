@@ -81,18 +81,18 @@ impl<T: Show> Show for Extent<T> {
 }
 
 pub trait Indexable: Sized {
-    type One;
+    type One: Clone;
     type Iter: Iterator<Item = Self::One>;
 
     fn head(&self) -> Option<Self::One>;
-    fn tail(&self) -> Option<Self>;
+    fn length_of(token: Self::One) -> usize;
     fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> Option<Self>;
     fn iter(&self) -> Self::Iter;
 }
 
-use std::ops::{Bound, RangeBounds, RangeInclusive};
+use std::ops::{Bound, RangeBounds, Range};
 
-fn abs<R: RangeBounds<usize>>(range: R, start: usize, end: usize) -> RangeInclusive<usize> {
+fn abs<R: RangeBounds<usize>>(range: R, start: usize, end: usize) -> Range<usize> {
     let start = match range.start_bound() {
         Bound::Unbounded => start,
         Bound::Included(&n) => n,
@@ -100,12 +100,12 @@ fn abs<R: RangeBounds<usize>>(range: R, start: usize, end: usize) -> RangeInclus
     };
 
     let end = match range.end_bound() {
-        Bound::Unbounded => end.saturating_sub(1),
-        Bound::Included(&n) => n,
-        Bound::Excluded(&n) => n.saturating_sub(1),
+        Bound::Unbounded => end,
+        Bound::Included(&n) => n.saturating_add(1),
+        Bound::Excluded(&n) => n,
     };
 
-    RangeInclusive::new(start, end)
+    Range { start, end }
 }
 
 impl<'a> Indexable for &'a str {
@@ -116,8 +116,8 @@ impl<'a> Indexable for &'a str {
         self.chars().next()
     }
 
-    fn tail(&self) -> Option<Self> {
-        self.get(self.head()?.len_utf8()..)
+    fn length_of(token: Self::One) -> usize {
+        token.len_utf8()
     }
 
     fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> Option<Self> {
@@ -137,8 +137,8 @@ impl<'a, T: Clone> Indexable for &'a [T] {
         self.get(0).cloned()
     }
 
-    fn tail(&self) -> Option<Self> {
-        self.get(1..)
+    fn length_of(_: Self::One) -> usize {
+        1
     }
 
     fn slice<R: std::ops::RangeBounds<usize>>(&self, range: R) -> Option<Self> {
@@ -201,7 +201,7 @@ impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
     {
         let token = self.token()?;
         if cond(&token) {
-            self.items = self.items.tail().unwrap();
+            self.items = self.items.slice(T::length_of(token.clone())..).unwrap();
             Some(token)
         } else {
             None
@@ -228,9 +228,10 @@ impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
         where F: FnMut(&Self::Token) -> bool
     {
         let start = self.offset();
-        let matches = self.items.iter()
+        let matches: usize = self.items.iter()
             .take_while(cond)
-            .count();
+            .map(T::length_of)
+            .sum();
 
         let values = self.items.slice(..matches).unwrap();
         self.items = self.items.slice(matches..).unwrap();

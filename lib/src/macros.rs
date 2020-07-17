@@ -18,7 +18,7 @@ pub use pear_codegen::{parser, switch};
 #[doc(inline)]
 pub use crate::{parse, parse_declare, parse_error, parse_try, is_parse_debug};
 #[doc(inline)]
-pub use crate::{parse_marker, parse_mark, parse_context};
+pub use crate::{parse_current_marker, parse_last_marker, parse_mark, parse_context};
 #[doc(inline)]
 pub use crate::impl_show_with;
 
@@ -100,12 +100,22 @@ macro_rules! parse_error {
     };
 }
 
-/// Returns the current marker.
+/// Returns the last marker that was set.
 ///
 /// Invoked with no arguments: `parse_marker!()`
 #[macro_export]
-macro_rules! parse_marker {
+macro_rules! parse_last_marker {
     ([$n:expr; $i:expr; $marker:expr; $T:ty]) => (*$marker);
+}
+
+/// Return the mark at the current parsing position.
+///
+/// Invoked with no arguments: `parse_current_marker!()`
+#[macro_export]
+macro_rules! parse_current_marker {
+    ([$info:expr; $input:expr; $marker:expr; $T:ty]) => (
+        $crate::input::Input::mark($input, $info)
+    )
 }
 
 /// Sets the marker to the current position.

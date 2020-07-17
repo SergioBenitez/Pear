@@ -5,27 +5,39 @@ type FourMarkers = (usize, usize, usize, usize);
 
 #[parser]
 fn simple<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
-    let first = parse_marker!();
+    let first = parse_last_marker!();
     eat('.')?;
-    let second = parse_marker!();
+    let second = parse_last_marker!();
     eat_slice("..")?;
-    let third = parse_marker!();
+    let third = parse_last_marker!();
     eat_slice("..")?;
-    let fourth = parse_marker!();
+    let fourth = parse_last_marker!();
+    (first, second, third, fourth)
+}
+
+#[parser]
+fn simple_updating<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
+    let first = parse_current_marker!();
+    eat('.')?;
+    let second = parse_current_marker!();
+    eat_slice("..")?;
+    let third = parse_current_marker!();
+    eat_slice("..")?;
+    let fourth = parse_current_marker!();
     (first, second, third, fourth)
 }
 
 #[parser]
 fn resetting<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
-    let first = parse_marker!();
+    let first = parse_last_marker!();
     eat('.')?;
     parse_mark!();
-    let second = parse_marker!();
+    let second = parse_last_marker!();
     eat_slice("..")?;
-    let third = parse_marker!();
+    let third = parse_last_marker!();
     eat_slice("..")?;
     parse_mark!();
-    let fourth = parse_marker!();
+    let fourth = parse_last_marker!();
     (first, second, third, fourth)
 }
 
@@ -33,6 +45,12 @@ fn resetting<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
 fn test_simple_marker() {
     let result = parse!(simple: &mut Text::from(".....")).unwrap();
     assert_eq!(result, (0, 0, 0, 0));
+}
+
+#[test]
+fn test_updating_marker() {
+    let result = parse!(simple_updating: &mut Text::from(".....")).unwrap();
+    assert_eq!(result, (0, 1, 3, 5));
 }
 
 #[test]
