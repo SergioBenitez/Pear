@@ -114,12 +114,12 @@ impl<'a> Indexable for &'a str {
     }
 }
 
-impl<'a, T> Indexable for &'a [T] {
-    type One = &'a T;
-    type Iter = std::slice::Iter<'a, T>;
+impl<'a, T: Clone> Indexable for &'a [T] {
+    type One = T;
+    type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
 
     fn head(&self) -> Option<Self::One> {
-        self.get(0)
+        self.get(0).cloned()
     }
 
     fn tail(&self) -> Option<Self> {
@@ -131,7 +131,7 @@ impl<'a, T> Indexable for &'a [T] {
     }
 
     fn iter(&self) -> Self::Iter {
-        (self as &'a [T]).iter()
+        (self as &'a [T]).iter().cloned()
     }
 }
 
