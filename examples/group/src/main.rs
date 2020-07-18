@@ -1,9 +1,10 @@
 #![warn(rust_2018_idioms)]
 
+use pear::input::{Pear, Text};
 use pear::macros::{parser, switch, parse};
 use pear::parsers::*;
 
-type Input<'a> = pear::input::Text<'a>;
+type Input<'a> = Pear<Text<'a>>;
 type Result<'a, T> = pear::input::Result<T, Input<'a>>;
 
 #[derive(Debug)]
@@ -77,7 +78,7 @@ fn tokens<'a>(input: &mut Input<'a>) -> Result<'a, Tokens> {
 const STRING: &str = "(( hi )) ([ (hey  there ]) hi";
 
 fn main() {
-    let result = parse!(tokens: &mut pear::input::Text::from(STRING));
+    let result = parse!(tokens: Text::from(STRING));
 
     match result {
         Err(ref e) => println!("Error: {}", e),

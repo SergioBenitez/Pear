@@ -3,7 +3,7 @@
 use std::fmt;
 
 use pear::parsers::*;
-use pear::input::Result;
+use pear::input::{Pear, Result};
 use pear::macros::{parser, parse, switch, parse_declare, parse_error};
 
 #[derive(Debug, PartialEq)]
@@ -61,7 +61,6 @@ fn is_whitespace(&byte: &char) -> bool {
     byte == ' ' || byte == '\t' || byte == '\n'
 }
 
-
 #[inline]
 fn is_num_char(&byte: &char) -> bool {
     match byte { '0'..='9' | '.' => true, _ => false }
@@ -70,17 +69,17 @@ fn is_num_char(&byte: &char) -> bool {
 parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
-fn comment<'a, I: Input<'a>>(input: &mut I) -> Result<(), I> {
+fn comment<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<(), I> {
     (eat(';')?, skip_while(|c| *c != '\n')?);
 }
 
 #[parser]
-fn float<'a, I: Input<'a>>(input: &mut I) -> Result<f64, I> {
+fn float<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<f64, I> {
     take_some_while(is_num_char)?.parse().or_else(|e| parse_error!("{}", e)?)
 }
 
 #[parser]
-fn value<'a, I: Input<'a>>(input: &mut I) -> Result<Value<'a>, I> {
+fn value<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<Value<'a>, I> {
     switch! {
         eat_slice("true") | eat_slice("yes") => Value::Boolean(true),
         eat_slice("false") | eat_slice("no") => Value::Boolean(false),
@@ -90,17 +89,17 @@ fn value<'a, I: Input<'a>>(input: &mut I) -> Result<Value<'a>, I> {
 }
 
 #[parser]
-fn heading<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
+fn heading<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<&'a str, I> {
     delimited_some('[', |c| !is_whitespace(c), ']')?
 }
 
 #[parser]
-fn name<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
+fn name<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<&'a str, I> {
     take_some_while(|&c| !"=\n;".contains(c))?.trim_end()
 }
 
 #[parser]
-fn properties<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<Property<'a>>, I> {
+fn properties<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<Vec<Property<'a>>, I> {
     let mut properties = Vec::new();
     loop {
         skip_while(is_whitespace)?;
@@ -118,7 +117,7 @@ fn properties<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<Property<'a>>, I> {
 }
 
 #[parser]
-fn ini<'a, I: Input<'a>>(input: &mut I) -> Result<IniConfig<'a>, I> {
+fn ini<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<IniConfig<'a>, I> {
     let mut sections = Vec::new();
     loop {
         skip_while(is_whitespace)?;
@@ -158,9 +157,9 @@ a=1
 
 fn main() {
     // let start = time::precise_time_ns();
-    // let result = parse!(ini: &mut INI_STRING);
-    let result = parse!(ini: &mut pear::input::Text::from(INI_STRING));
-    // let result = parse!(ini: &mut INI_STRING);
+    // let result = parse!(ini: &mut Pear<I>NI_STRING);
+    let result = parse!(ini: pear::input::Text::from(INI_STRING));
+    // let result = parse!(ini: &mut Pear<I>NI_STRING);
     // let end = time::precise_time_ns();
 
     match result {

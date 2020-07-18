@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use pear::input::{Text, Span, Expected};
+use pear::input::{Text, Pear, Span, Expected};
 use pear::{macros::*, parsers::*};
 
 type Result<'a, T> = pear::result::Result<T, Span<'a>, Error<'a>>;
@@ -35,7 +35,7 @@ impl<'a> From<Expected<Text<'a>>> for Error<'a> {
 impl_show_with!(Debug, Error<'_>);
 
 #[parser]
-fn combo<'a>(input: &mut Text<'a>) -> Result<'a, ()> {
+fn combo<'a>(input: &mut Pear<Text<'a>>) -> Result<'a, ()> {
     let start = switch! {
         peek('a') => eat_slice("abc")?,
         peek('b') => eat_slice("bat")?,
@@ -75,30 +75,30 @@ impl<'a> Error<'a> {
 
 #[test]
 fn test_custom_expect_ok() {
-    let result = parse!(combo: &mut Text::from("bat"));
+    let result = parse!(combo: Text::from("bat"));
     assert!(result.is_ok());
 
-    let result = parse!(combo: &mut Text::from("abcdef"));
+    let result = parse!(combo: Text::from("abcdef"));
     assert!(result.is_ok());
 }
 
 #[test]
 fn test_custom_expect_expected() {
-    let result = parse!(combo: &mut Text::from("ab"));
+    let result = parse!(combo: Text::from("ab"));
     result.unwrap_err().error.assert_expected();
 
-    let result = parse!(combo: &mut Text::from("ba"));
+    let result = parse!(combo: Text::from("ba"));
     result.unwrap_err().error.assert_expected();
 }
 
 #[test]
 fn test_custom_expect_other() {
-    let result = parse!(combo: &mut Text::from("abc"));
+    let result = parse!(combo: Text::from("abc"));
     result.unwrap_err().error.assert_other();
 
-    let result = parse!(combo: &mut Text::from("abcd"));
+    let result = parse!(combo: Text::from("abcd"));
     result.unwrap_err().error.assert_other();
 
-    let result = parse!(combo: &mut Text::from("batfoo"));
+    let result = parse!(combo: Text::from("batfoo"));
     result.unwrap_err().error.assert_other();
 }

@@ -20,7 +20,7 @@ fn main() {
         "escaped characters": "\u2192\uD83D\uDE00\"\t\uD834\uDD1E"
     }"#;
 
-    let result = parse!(value: &mut pear::input::Text::from(test));
+    let result = parse!(value: pear::input::Text::from(test));
     match result {
         Ok(v) => println!("Value: {:#?}", v),
         Err(e) => println!("Error: {}", e)

@@ -76,7 +76,7 @@ impl<T> Length for Extent<T> {
 
 impl<T: Show> Show for Extent<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{} {}", self.start, self.end, &self.values as &dyn Show)
+        write!(f, "{}..{} {}", self.start, self.end, &self.values as &dyn Show)
     }
 }
 
@@ -146,7 +146,7 @@ impl<'a, T: Clone> Indexable for &'a [T] {
     }
 
     fn iter(&self) -> Self::Iter {
-        (self as &'a [T]).iter().cloned()
+        (*self as &[T]).iter().cloned()
     }
 }
 
@@ -258,10 +258,10 @@ impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
     /// Optionally returns a context to identify the current input position. By
     /// default, this method returns `None`, indicating that no context could be
     /// resolved.
-    fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
         let end = self.offset();
-        let values = self.start.slice(*mark..end).unwrap();
-        Some(Extent { start: *mark, end, values })
+        let values = self.start.slice(mark..end).unwrap();
+        Some(Extent { start: mark, end, values })
     }
 }
 

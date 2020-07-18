@@ -5,7 +5,9 @@ mod cursor;
 mod text;
 mod text_file;
 mod show;
+mod pear;
 
+pub use self::pear::{Pear, Debugger, Options};
 pub use input::{Input, Rewind, Token, Slice, ParserInfo};
 pub use cursor::{Cursor, Extent};
 pub use text::{Text, Span};

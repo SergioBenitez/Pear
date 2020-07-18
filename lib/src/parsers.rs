@@ -1,5 +1,5 @@
 use crate::error::{ParseError, Expected};
-use crate::input::{Input, Length, Token, Slice, Show, Result, Rewind};
+use crate::input::{Input, Pear, Length, Token, Slice, Show, Result, Rewind};
 use crate::macros::parser;
 
 // // TODO:
@@ -10,37 +10,45 @@ use crate::macros::parser;
 
 #[inline]
 fn expected_token<T, A, I>(
-    input: &mut I,
+    input: &mut Pear<I>,
     token: Option<T>
 ) -> Result<A, I>
     where T: Token<I>, I: Input
 {
-    // FIXME: This adds quite a bit of overhead. By my benchmark, 4x! If we
-    // specialization, we could try to convert `token` into an `I::Token`, and
-    // failing that, store it in a slice as is done here. Then there's the other
-    // idea of being able to tell a parser that the error is just going to be
-    // thrown away, so don't generate it.
-    let string = token.map(|t| iformat!("{}", &t as &dyn Show));
-    let expected = Expected::Token(string, input.token());
+    let expected = if input.emit_error {
+        // TODO: Have some way to test this is being called minimally.
+        // println!("Expected token.");
+        let string = token.map(|t| iformat!("{}", &t as &dyn Show));
+        Expected::Token(string, input.token())
+    } else {
+        Expected::Elided
+    };
+
     Err(ParseError::new(expected))
 }
 
 #[inline]
 fn expected_slice<S, A, I>(
-    input: &mut I,
+    input: &mut Pear<I>,
     slice: S
 ) -> Result<A, I>
     where S: Slice<I>, I: Input
 {
-    // FIXME: This adds quite a bit of overhead!
-    let string = iformat!("{}", &slice as &dyn Show);
-    let expected = Expected::Slice(Some(string), input.slice(slice.len()));
+    let expected = if input.emit_error {
+        // TODO: Have some way to test this is being called minimally.
+        // println!("Expected slice.");
+        let string = iformat!("{}", &slice as &dyn Show);
+        Expected::Slice(Some(string), input.slice(slice.len()))
+    } else {
+        Expected::Elided
+    };
+
     Err(ParseError::new(expected))
 }
 
 /// Eats the current token if it is `token`.
 #[parser(raw)]
-pub fn eat<I, T>(input: &mut I, token: T) -> Result<I::Token, I>
+pub fn eat<I, T>(input: &mut Pear<I>, token: T) -> Result<I::Token, I>
     where I: Input, T: Token<I>
 {
     match input.eat(|t| &token == t) {
@@ -51,7 +59,7 @@ pub fn eat<I, T>(input: &mut I, token: T) -> Result<I::Token, I>
 
 /// Eats the token `token` if `cond` holds on the current token.
 #[parser(raw)]
-pub fn eat_if<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
+pub fn eat_if<I, F>(input: &mut Pear<I>, cond: F) -> Result<I::Token, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     match input.eat(cond) {
@@ -62,7 +70,7 @@ pub fn eat_if<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
 
 /// Eats the current token unconditionally. Fails if there are no tokens.
 #[parser(raw)]
-pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
+pub fn eat_any<I: Input>(input: &mut Pear<I>) -> Result<I::Token, I> {
     match input.eat(|_| true) {
         Some(token) => Ok(token),
         None => Err(ParseError::new(Expected::Token(None, None)))
@@ -71,7 +79,7 @@ pub fn eat_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
 
 /// Skips the current token unconditionally. Fails if there are no tokens.
 #[parser(raw)]
-pub fn skip_any<I: Input>(input: &mut I) -> Result<(), I> {
+pub fn skip_any<I: Input>(input: &mut Pear<I>) -> Result<(), I> {
     let mut skipped = false;
     input.skip(|_| {
         if !skipped {
@@ -90,7 +98,7 @@ pub fn skip_any<I: Input>(input: &mut I) -> Result<(), I> {
 
 /// Eats the current slice if it is `slice`.
 #[parser(raw)]
-pub fn eat_slice<I, S>(input: &mut I, slice: S) -> Result<I::Slice, I>
+pub fn eat_slice<I, S>(input: &mut Pear<I>, slice: S) -> Result<I::Slice, I>
     where I: Input, S: Slice<I>
 {
     match input.eat_slice(slice.len(), |s| &slice == s) {
@@ -101,7 +109,7 @@ pub fn eat_slice<I, S>(input: &mut I, slice: S) -> Result<I::Slice, I>
 
 /// Succeeds if the current token is `token`.
 #[parser(raw)]
-pub fn peek<I, T>(input: &mut I, token: T) -> Result<(), I>
+pub fn peek<I, T>(input: &mut Pear<I>, token: T) -> Result<(), I>
     where I: Input, T: Token<I>
 {
     match input.peek(|t| &token == t) {
@@ -112,7 +120,7 @@ pub fn peek<I, T>(input: &mut I, token: T) -> Result<(), I>
 
 /// Succeeds if `cond` holds for the current token.
 #[parser(raw)]
-pub fn peek_if_copy<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
+pub fn peek_if_copy<I, F>(input: &mut Pear<I>, cond: F) -> Result<I::Token, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     match input.peek(cond) {
@@ -123,7 +131,7 @@ pub fn peek_if_copy<I, F>(input: &mut I, cond: F) -> Result<I::Token, I>
 
 /// Succeeds if `cond` holds for the current token.
 #[parser(raw)]
-pub fn peek_if<I, F>(input: &mut I, cond: F) -> Result<(), I>
+pub fn peek_if<I, F>(input: &mut Pear<I>, cond: F) -> Result<(), I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     match input.peek(cond) {
@@ -134,7 +142,7 @@ pub fn peek_if<I, F>(input: &mut I, cond: F) -> Result<(), I>
 
 /// Succeeds if the current slice is `slice`.
 #[parser(raw)]
-pub fn peek_slice<I, S>(input: &mut I, slice: S) -> Result<(), I>
+pub fn peek_slice<I, S>(input: &mut Pear<I>, slice: S) -> Result<(), I>
     where I: Input, S: Slice<I>
 {
     match input.peek_slice(slice.len(), |s| &slice == s) {
@@ -145,7 +153,7 @@ pub fn peek_slice<I, S>(input: &mut I, slice: S) -> Result<(), I>
 
 /// Returns the current token.
 #[parser(raw)]
-pub fn peek_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
+pub fn peek_any<I: Input>(input: &mut Pear<I>) -> Result<I::Token, I> {
     match input.token() {
         Some(peeked) => Ok(peeked),
         None => Err(ParseError::new(Expected::Token(None, None)))
@@ -154,7 +162,7 @@ pub fn peek_any<I: Input>(input: &mut I) -> Result<I::Token, I> {
 
 /// Skips tokens while `cond` matches.
 #[parser(raw)]
-pub fn skip_while<I, F>(input: &mut I, cond: F) -> Result<usize, I>
+pub fn skip_while<I, F>(input: &mut Pear<I>, cond: F) -> Result<usize, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     Ok(input.skip(cond))
@@ -163,7 +171,7 @@ pub fn skip_while<I, F>(input: &mut I, cond: F) -> Result<usize, I>
 /// Consumes tokens while `cond` matches and returns them. Succeeds even if no
 /// tokens match.
 #[parser(raw)]
-pub fn take_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
+pub fn take_while<I, F>(input: &mut Pear<I>, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     Ok(input.take(cond))
@@ -173,7 +181,7 @@ pub fn take_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
 /// beginning at a length of `0` and ending when `cond` fails. Returns the slice
 /// between `0` and `cond` failing. Errors if no such slice exists.
 #[parser(raw)]
-pub fn take_while_slice<I, F>(input: &mut I, mut f: F) -> Result<I::Slice, I>
+pub fn take_while_slice<I, F>(input: &mut Pear<I>, mut f: F) -> Result<I::Slice, I>
     where I: Input, F: FnMut(&I::Slice) -> bool
 {
     let mut len = 0;
@@ -207,7 +215,7 @@ pub fn take_while_slice<I, F>(input: &mut I, mut f: F) -> Result<I::Slice, I>
 /// Always succeeds. If no tokens match, the result will be empty. If there are
 /// fewer than `n` tokens, takes all tokens and returns them.
 #[parser(raw)]
-pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::Many, I>
+pub fn take_while_window<I, F>(input: &mut Pear<I>, n: usize, mut f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
     if !input.has(n) {
@@ -247,7 +255,7 @@ pub fn take_while_window<I, F>(input: &mut I, n: usize, mut f: F) -> Result<I::M
 /// returns them. Fails if there no tokens match, otherwise returns all of the
 /// tokens before the first failure.
 #[parser(raw)]
-pub fn take_some_while_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+pub fn take_some_while_window<I, F>(input: &mut Pear<I>, n: usize, f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
     let result = take_while_window(input, n, f)?;
@@ -262,7 +270,7 @@ pub fn take_some_while_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::
 /// returns them. Fails if there aren't at least `n` tokens, otherwise always
 /// otherwise always succeeds. If no tokens match, the result will be empty.
 #[parser(raw)]
-pub fn take_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+pub fn take_while_some_window<I, F>(input: &mut Pear<I>, n: usize, f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
     if !input.has(n) {
@@ -276,7 +284,7 @@ pub fn take_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::
 /// returns them. Fails if there aren't at least `n` tokens or if no tokens
 /// match, otherwise returns all of the tokens before the first failure.
 #[parser(raw)]
-pub fn take_some_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Result<I::Many, I>
+pub fn take_some_while_some_window<I, F>(input: &mut Pear<I>, n: usize, f: F) -> Result<I::Many, I>
     where I: Input + Rewind, F: FnMut(&I::Slice) -> bool
 {
     if !input.has(n) {
@@ -289,7 +297,7 @@ pub fn take_some_while_some_window<I, F>(input: &mut I, n: usize, f: F) -> Resul
 /// Consumes tokens while `cond` matches on a window of tokens of size `n` and
 /// returns them. Succeeds even if no tokens match.
 #[parser(raw)]
-pub fn take_until_slice<I, S>(input: &mut I, slice: S) -> Result<I::Many, I>
+pub fn take_until_slice<I, S>(input: &mut Pear<I>, slice: S) -> Result<I::Many, I>
     where I: Input + Rewind, S: Slice<I>
 {
     take_while_window(input, slice.len(), |s| &slice != s)
@@ -298,7 +306,7 @@ pub fn take_until_slice<I, S>(input: &mut I, slice: S) -> Result<I::Many, I>
 /// Consumes tokens while `cond` matches and returns them. Succeeds only if at
 /// least one token matched `cond`.
 #[parser(raw)]
-pub fn take_some_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
+pub fn take_some_while<I, F>(input: &mut Pear<I>, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     let value = input.take(cond);
@@ -313,7 +321,7 @@ pub fn take_some_while<I, F>(input: &mut I, cond: F) -> Result<I::Many, I>
 /// even if no tokens match.
 #[parser(raw)]
 pub fn take_while_until<I, T, F>(
-    input: &mut I,
+    input: &mut Pear<I>,
     mut cond: F,
     until: T,
 ) -> Result<I::Many, I>
@@ -328,7 +336,7 @@ pub fn take_while_until<I, T, F>(
 /// only if at least one token matched `cond`.
 #[parser(raw)]
 pub fn take_some_while_until<I, T, F>(
-    input: &mut I,
+    input: &mut Pear<I>,
     mut cond: F,
     until: T,
 ) -> Result<I::Many, I>
@@ -341,14 +349,14 @@ pub fn take_some_while_until<I, T, F>(
 
 /// Takes at most `n` tokens.
 #[parser(raw)]
-pub fn take_n<I: Input>(input: &mut I, n: usize) -> Result<I::Many, I> {
+pub fn take_n<I: Input>(input: &mut Pear<I>, n: usize) -> Result<I::Many, I> {
     let mut i = 0;
     Ok(input.take(|_| { let c = i < n; i += 1; c }))
 }
 
 /// Takes at most `n` tokens as long as `cond` holds.
 #[parser(raw)]
-pub fn take_n_while<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, I>
+pub fn take_n_while<I, F>(input: &mut Pear<I>, n: usize, mut cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     let mut i = 0;
@@ -357,7 +365,7 @@ pub fn take_n_while<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Man
 
 /// Take exactly `n` tokens, ensuring `cond` holds on all `n`.
 #[parser(raw)]
-pub fn take_n_if<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, I>
+pub fn take_n_if<I, F>(input: &mut Pear<I>, n: usize, mut cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     let mut i = 0;
@@ -374,7 +382,7 @@ pub fn take_n_if<I, F>(input: &mut I, n: usize, mut cond: F) -> Result<I::Many, 
 /// Succeeds even if there are no tokens between `start` and `end`.
 #[parser(raw)]
 pub fn delimited<I, T, F>(
-    input: &mut I,
+    input: &mut Pear<I>,
     start: T,
     mut cond: F,
     end: T,
@@ -394,7 +402,7 @@ pub fn delimited<I, T, F>(
 /// must be at least one token between `start` and `end`.
 #[parser(raw)]
 pub fn delimited_some<I, T, F>(
-    input: &mut I,
+    input: &mut Pear<I>,
     start: T,
     mut cond: F,
     end: T,
@@ -411,7 +419,7 @@ pub fn delimited_some<I, T, F>(
 
 /// Succeeds only if the input has reached EOF.
 #[parser(raw)]
-pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
+pub fn eof<I: Input>(input: &mut Pear<I>) -> Result<(), I> {
     if input.has(1) {
         let next = input.token();
         Err(ParseError::new(Expected::Eof(next)))
@@ -423,7 +431,7 @@ pub fn eof<I: Input>(input: &mut I) -> Result<(), I> {
 // // Like delimited, but keeps the start and end tokens.
 // #[parser(raw)]
 // pub fn enclosed<I: Input, F>(
-//     input: &mut I,
+//     input: &mut Pear<I>,
 //     start: I::Token,
 //     mut cond: F,
 //     end: I::Token

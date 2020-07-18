@@ -37,6 +37,7 @@ pub enum Expected<Token, Slice> {
     Slice(Option<InlinableString>, Option<Slice>),
     Eof(Option<Token>),
     Other(CowInlineString),
+    Elided
 }
 
 impl<Token, Slice> Expected<Token, Slice> {
@@ -50,6 +51,7 @@ impl<Token, Slice> Expected<Token, Slice> {
             Slice(e, v) => Slice(e, v.map(s)),
             Eof(v) => Eof(v.map(t)),
             Other(v) => Other(v),
+            Expected::Elided => Expected::Elided,
         }
     }
 }
@@ -97,6 +99,7 @@ impl<T: fmt::Debug, S: fmt::Debug> fmt::Debug for Expected<T, S> {
             Expected::Other(v) => {
                 f.debug_tuple("Expected::Other").field(&v).finish()
             }
+            Expected::Elided => f.debug_tuple("Expected::Elided").finish()
         }
     }
 }
@@ -107,7 +110,8 @@ impl<T: Clone, S: Clone> Clone for Expected<T, S> {
             Expected::Token(e, f) => Expected::Token(e.clone(), f.clone()),
             Expected::Slice(e, f) => Expected::Slice(e.clone(), f.clone()),
             Expected::Eof(f) => Expected::Eof(f.clone()),
-            Expected::Other(v) => Expected::Other(v.clone())
+            Expected::Other(v) => Expected::Other(v.clone()),
+            Expected::Elided => Expected::Elided,
         }
     }
 }
@@ -150,9 +154,8 @@ impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
                 let found = found as &dyn Show;
                 write!(f, "expected EOF but found {}", found)
             }
-            Expected::Other(ref other) => {
-                write!(f, "{}", other)
-            }
+            Expected::Other(ref other) => write!(f, "{}", other),
+            Expected::Elided => write!(f, "[ERROR ELIDED]")
         }
     }
 }

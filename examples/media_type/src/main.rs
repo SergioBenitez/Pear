@@ -28,7 +28,7 @@ fn is_whitespace(&byte: &char) -> bool {
 parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 
 #[parser]
-fn quoted_string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
+fn quoted_string<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<&'a str, I> {
     eat('"')?;
 
     let mut is_escaped = false;
@@ -43,7 +43,7 @@ fn quoted_string<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
 }
 
 #[parser]
-fn media_param<'a, I: Input<'a>>(input: &mut I) -> Result<(&'a str, &'a str), I> {
+fn media_param<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<(&'a str, &'a str), I> {
     let key = (take_some_while_until(is_valid_token, '=')?, eat('=')?).0;
     let value = switch! {
         peek('"') => quoted_string()?,
@@ -54,7 +54,7 @@ fn media_param<'a, I: Input<'a>>(input: &mut I) -> Result<(&'a str, &'a str), I>
 }
 
 #[parser]
-fn media_type<'a, I: Input<'a>>(input: &mut I) -> Result<MediaType<'a>, I> {
+fn media_type<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<MediaType<'a>, I> {
     MediaType {
         top: take_some_while_until(is_valid_token, '/')?,
         sub: (eat('/')?, take_some_while_until(is_valid_token, ';')?).1,
@@ -66,7 +66,7 @@ fn media_type<'a, I: Input<'a>>(input: &mut I) -> Result<MediaType<'a>, I> {
 }
 
 #[parser]
-fn weighted_media_type<'a, I: Input<'a>>(input: &mut I) -> Result<(MediaType<'a>, Option<f32>), I> {
+fn weighted_media_type<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<(MediaType<'a>, Option<f32>), I> {
     let media_type = media_type()?;
     let weight = match media_type.params.iter().next() {
         Some(&("q", value)) => match value.parse::<f32>().ok() {
@@ -81,18 +81,18 @@ fn weighted_media_type<'a, I: Input<'a>>(input: &mut I) -> Result<(MediaType<'a>
 }
 
 #[parser]
-fn accept<'a, I: Input<'a>>(input: &mut I) -> Result<Vec<(MediaType<'a>, Option<f32>)>, I> {
+fn accept<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<Vec<(MediaType<'a>, Option<f32>)>, I> {
     Ok(series(|i| surrounded(i, weighted_media_type, is_whitespace), ',')?)
 }
 
 fn main() {
     use pear::input::Text;
 
-    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut Text::from("a/b; a=\"abc\"; c=d")));
-    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=\"ab=\\\"c\\\"\"; c=d"));
-    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b; a=b; c=d"));
-    println!("MEDIA TYPE: {:?}", parse!(media_type: &mut "a/b"));
-    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b   ;    a=b  , c/d"));
-    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b, text/html"));
-    println!("ACCEPT: {:?}", parse!(accept: &mut "a/b; q=0.7 ,  c/d"));
+    println!("MEDIA TYPE: {:?}", parse!(media_type: Text::from("a/b; a=\"abc\"; c=d")));
+    println!("MEDIA TYPE: {:?}", parse!(media_type: "a/b; a=\"ab=\\\"c\\\"\"; c=d"));
+    println!("MEDIA TYPE: {:?}", parse!(media_type: "a/b; a=b; c=d"));
+    println!("MEDIA TYPE: {:?}", parse!(media_type: "a/b"));
+    println!("ACCEPT: {:?}", parse!(accept: "a/b   ;    a=b  , c/d"));
+    println!("ACCEPT: {:?}", parse!(accept: "a/b, text/html"));
+    println!("ACCEPT: {:?}", parse!(accept: "a/b; q=0.7 ,  c/d"));
 }

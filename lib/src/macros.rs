@@ -37,19 +37,20 @@ pub use crate::impl_show_with;
 /// ```
 #[macro_export]
 macro_rules! parse {
-    ($parser:ident : $e:expr) => ({
-        let input = $e;
+    ($parser:ident : &mut $e:expr) => ({
+        let input = &mut $e;
         (move || {
             let result = $parser(input)?;
             $crate::parsers::eof(input).map_err(|e| e.into())?;
             $crate::result::AsResult::as_result(result)
         })()
     });
+    ($parser:ident : $e:expr) => (parse!($parser(): $e));
     ($parser:ident ($($x:expr),*) : $e:expr) => ({
-        let input = $e;
+        let mut input: $crate::input::Pear<_> = $e.into();
         (move || {
-            let result = $parser(input, $($x),*)?;
-            $crate::parsers::eof(input).map_err(|e| e.into())?;
+            let result = $parser(&mut input $(, $x)*)?;
+            $crate::parsers::eof(&mut input).map_err(|e| e.into())?;
             $crate::result::AsResult::as_result(result)
         })()
     })
@@ -132,7 +133,7 @@ macro_rules! parse_mark {
 #[macro_export]
 macro_rules! parse_context {
     ([$n:expr; $i:expr; $marker:expr; $T:ty]) => (
-        $crate::input::Input::context($i, $marker)
+        $crate::input::Input::context($i, *$marker)
     );
 }
 

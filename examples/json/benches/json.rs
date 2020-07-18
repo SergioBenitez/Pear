@@ -5,8 +5,8 @@ use json::*;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[inline(always)]
-fn parse_json<'a, I: Input<'a>>(mut input: I) -> Result<JsonValue<'a>, I> {
-    let result = parse!(value: &mut input);
+fn parse_json<'a, I: Input<'a>>(input: I) -> Result<JsonValue<'a>, I> {
+    let result = parse!(value: input);
     assert!(result.is_ok());
     result
 }

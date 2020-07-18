@@ -12,6 +12,8 @@ pub struct Span<'a> {
     pub snippet: Option<&'a str>,
 }
 
+const SNIPPET_LEN: usize = 30;
+
 impl<'a> Show for Span<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let (a, b, _) = self.start;
@@ -23,13 +25,42 @@ impl<'a> Show for Span<'a> {
             write!(f, "{}:{} to {}:{}", a, b, c, d)?;
         }
 
+        let write_snippet = |f: &mut std::fmt::Formatter<'_>, snippet: &str| {
+            for c in snippet.escape_debug() { write!(f, "{}", c)?; }
+            Ok(())
+        };
+
         if let Some(snippet) = self.snippet {
             write!(f, " \"")?;
-            for c in snippet.chars() { write!(f, "{:?}", c)?; }
-            if let Some(cursor) = self.cursor { write!(f, "{:?}", cursor)?; }
+            if snippet.len() > SNIPPET_LEN + 6 {
+                write_snippet(f, &snippet[..SNIPPET_LEN / 2])?;
+
+                #[cfg(feature = "color")]
+                write!(f, " {} ", yansi::Paint::blue("..."))?;
+
+                #[cfg(not(feature = "color"))]
+                write!(f, " ... ")?;
+
+                let end_start = snippet.len() - SNIPPET_LEN / 2;
+                write_snippet(f, &snippet[end_start..])?;
+            } else {
+                write_snippet(f, snippet)?;
+            }
+
+            if let Some(cursor) = self.cursor {
+                #[cfg(feature = "color")]
+                write!(f, "{}", yansi::Paint::blue(cursor.escape_debug()))?;
+
+                #[cfg(not(feature = "color"))]
+                write!(f, "{}", cursor.escape_debug())?;
+            }
             write!(f, "\"")?;
         } else {
-            write!(f, " [EOF]")?;
+            #[cfg(feature = "color")]
+            write!(f, " {}", yansi::Paint::blue("[EOF]"))?;
+
+            #[cfg(not(feature = "color"))]
+            write!(f, " [EOF]");
         }
 
         Ok(())
@@ -44,7 +75,7 @@ pub struct Text<'a> {
 
 impl<'a> From<&'a str> for Text<'a> {
     fn from(start: &'a str) -> Text<'a> {
-        Text { start: start, current: start }
+        Text { start, current: start }
     }
 }
 
@@ -123,17 +154,18 @@ impl<'a> Input for Text<'a> {
         self.current.has(n)
     }
 
+    #[inline(always)]
     fn mark(&mut self, _: &ParserInfo) -> Self::Marker {
         self.start.len() - self.current.len()
     }
 
-    fn context(&mut self, mark: &Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
         let cursor = self.token();
         let bytes_read = self.start.len() - self.current.len();
         let pos = if bytes_read == 0 {
             Span { start: (1, 1, 0), end: (1, 1, 0), snippet: None, cursor }
         } else {
-            let start_offset = *mark;
+            let start_offset = mark;
             let end_offset = bytes_read;
 
             let to_start_str = &self.start[..start_offset];

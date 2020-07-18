@@ -124,11 +124,11 @@ fn wrapping_fn_block(
     args: &AttrArgs,
     ret_ty: &syn::Type,
 ) -> PResult<syn::Block> {
-    let (input_ident, input_ty) = extract_input_ident_ty(&function)?;
+    let (input, input_ty) = extract_input_ident_ty(&function)?;
     let fn_block = &function.block;
 
     let span = function.span();
-    let mark_ident = parse_marker_ident(input_ident.span());
+    let mark_ident = parse_marker_ident(input.span());
     let info_ident = parser_info_ident(function.sig.ident.span());
     let result_map = match args.raw.is_some() {
         true => quote_spanned!(span => (
@@ -145,7 +145,7 @@ fn wrapping_fn_block(
     };
 
     let rewind_expr = |span| quote_spanned! { span =>
-        <#input_ty as #scope::input::Rewind>::rewind_to(#input_ident, ___mark);
+        <#input_ty as #scope::input::Rewind>::rewind_to(#input, ___mark);
     };
 
     let (rewind, peek) = (args.rewind.map(rewind_expr), args.peek.map(rewind_expr));
@@ -153,34 +153,31 @@ fn wrapping_fn_block(
         let (name, raw) = (&function.sig.ident, args.raw.is_some());
         let name_str = name.to_string();
         quote_spanned!(span => {
-            // FIXME: Get rid of this!
             let ___info = #scope::input::ParserInfo { name: #name_str, raw: #raw };
-            if #scope::macros::is_parse_debug!() {
-                #scope::debug::parser_entry(&___info);
+            if let Some(ref mut ___debugger) = #input.options.debugger {
+                ___debugger.on_entry(&___info);
             }
 
-            let mut ___mark = #scope::input::Input::mark(#input_ident, &___info);
+            let mut ___mark = #scope::input::Input::mark(#input, &___info);
             let mut ___res: #ret_ty = #result_map(&___info, &mut ___mark);
             match ___res {
                 Ok(_) => { #peek },
-                // FIXME: This adds quite a bit of overhead, even when disabled!
-                // Should we have a `pear-lite`? CFG's to enable/disable?
-                Err(ref mut ___e) if #scope::debug::context_enabled() => {
-                    let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
+                Err(ref mut ___e) if #input.options.stacked_context => {
+                    let ___ctxt = #scope::input::Input::context(#input, ___mark);
                     ___e.push_context(___ctxt, ___info);
                     #rewind
                 },
                 Err(_) => { #rewind },
             }
 
-            // FIXME: Get rid of this!
-            if #scope::macros::is_parse_debug!() {
-                let ___ctxt = #scope::input::Input::context(#input_ident, &___mark);
-                let ___show = ___ctxt.as_ref().map(|c| c as &dyn #scope::input::Show);
-                #scope::debug::parser_exit(&___info, ___res.is_ok(), ___show);
+            if #input.options.debugger.is_some() {
+                let ___ctxt = #scope::input::Input::context(#input, ___mark);
+                if let Some(ref mut ___debugger) = #input.options.debugger {
+                    ___debugger.on_exit(&___info, ___res.is_ok(), ___ctxt);
+                }
             }
 
-            #scope::input::Input::unmark(#input_ident, &___info, ___res.is_ok(), ___mark);
+            #scope::input::Input::unmark(#input, &___info, ___res.is_ok(), ___mark);
             ___res
         })
     };
@@ -203,6 +200,7 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
     };
 
+    // FIXME: Enforce that the type is `crate::input::Pear<_>`.
     if !args.raw.is_some() {
         let (input_ident, _) = extract_input_ident_ty(&function)?;
         let input_expr = syn::Expr::Path(syn::ExprPath {
@@ -258,7 +256,13 @@ impl Case {
                 let call_expr = calls.iter().map(|call| {
                     let mut call = call.expr.clone();
                     call.args.insert(0, input.clone());
-                    call
+                    quote!({
+                        let ___preserve_error = #input.emit_error;
+                        #input.emit_error = false;
+                        let ___call_result = #call;
+                        #input.emit_error = ___preserve_error;
+                        ___call_result
+                    })
                 });
 
                 let case_expr = ::std::iter::repeat(&case_expr);
@@ -288,15 +292,15 @@ impl Switch {
 /// least one parameter and a return value. To typecheck, the free function must
 /// meet the following typing requirements:
 ///
-/// - The _first_ parameter's type `&mut I` must be a mutable reference to a
-///   type that implements [`Input`]. This is the _input_ parameter.
+/// - The _first_ parameter's type must be a mutable reference to a [`Pear<I>`]
+///   here `I` implements [`Input`]. This is the _input_ parameter.
 /// - The return type must be [`Result<O, I>`] where `I` is the inner type
 ///   of the input parameter and `O` can be any type.
 ///
 /// The following transformations are applied to the _contents_ of the
 /// attributed function:
 ///
-/// - The functions first parameter (of type `&mut I`) is passed as the
+/// - The functions first parameter (of type `&mut Pear<I>`) is passed as the
 ///   first parameter to every function call in the function with a posfix
 ///   `?`. That is, every function call of the form `foo(a, b, c, ...)?` is
 ///   converted to `foo(input, a, b, c, ...)?` where `input` is the input
@@ -335,15 +339,15 @@ impl Switch {
 /// # Example
 ///
 /// ```rust
-/// use pear::input::Result;
-/// use pear::macros::parser;
+/// use pear::input::{Pear, Text, Result};
+/// use pear::macros::{parser, parse};
 /// use pear::parsers::*;
 /// #
 /// # use pear::macros::parse_declare;
 /// # parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 ///
 /// #[parser]
-/// fn ab_in_dots<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
+/// fn ab_in_dots<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<&'a str, I> {
 ///     eat('.')?;
 ///     let inside = take_while(|&c| c == 'a' || c == 'b')?;
 ///     eat('.')?;
@@ -351,15 +355,14 @@ impl Switch {
 ///     inside
 /// }
 ///
-/// # use pear::{macros::parse, input::Text};
 /// #
-/// let x = parse!(ab_in_dots: &mut Text::from(".abba."));
+/// let x = parse!(ab_in_dots: Text::from(".abba."));
 /// assert_eq!(x.unwrap(), "abba");
 ///
-/// let x = parse!(ab_in_dots: &mut Text::from(".ba."));
+/// let x = parse!(ab_in_dots: Text::from(".ba."));
 /// assert_eq!(x.unwrap(), "ba");
 ///
-/// let x = parse!(ab_in_dots: &mut Text::from("..."));
+/// let x = parse!(ab_in_dots: Text::from("..."));
 /// assert!(x.is_err());
 /// ```
 #[proc_macro_attribute]

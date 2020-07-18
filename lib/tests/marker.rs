@@ -1,10 +1,12 @@
-use pear::input::{Text, Span, Result};
+use pear::input::Span;
 use pear::{macros::*, parsers::*};
 
 type FourMarkers = (usize, usize, usize, usize);
+type Input<'a> = pear::input::Pear<pear::input::Text<'a>>;
+type Result<'a, T> = pear::input::Result<T, Input<'a>>;
 
 #[parser]
-fn simple<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
+fn simple<'a>(input: &mut Input<'a>) -> Result<'a, FourMarkers> {
     let first = parse_last_marker!();
     eat('.')?;
     let second = parse_last_marker!();
@@ -16,7 +18,7 @@ fn simple<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
 }
 
 #[parser]
-fn simple_updating<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
+fn simple_updating<'a>(input: &mut Input<'a>) -> Result<'a, FourMarkers> {
     let first = parse_current_marker!();
     eat('.')?;
     let second = parse_current_marker!();
@@ -28,7 +30,7 @@ fn simple_updating<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
 }
 
 #[parser]
-fn resetting<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
+fn resetting<'a>(input: &mut Input<'a>) -> Result<'a, FourMarkers> {
     let first = parse_last_marker!();
     eat('.')?;
     parse_mark!();
@@ -43,26 +45,26 @@ fn resetting<'a>(input: &mut Text<'a>) -> Result<FourMarkers, Text<'a>> {
 
 #[test]
 fn test_simple_marker() {
-    let result = parse!(simple: &mut Text::from(".....")).unwrap();
+    let result = parse!(simple: Input::new(".....")).unwrap();
     assert_eq!(result, (0, 0, 0, 0));
 }
 
 #[test]
 fn test_updating_marker() {
-    let result = parse!(simple_updating: &mut Text::from(".....")).unwrap();
+    let result = parse!(simple_updating: Input::new(".....")).unwrap();
     assert_eq!(result, (0, 1, 3, 5));
 }
 
 #[test]
 fn test_resetting_marker() {
-    let result = parse!(resetting: &mut Text::from(".....")).unwrap();
+    let result = parse!(resetting: Input::new(".....")).unwrap();
     assert_eq!(result, (0, 1, 1, 5));
 }
 
 type TwoSpans<'a> = (Span<'a>, Span<'a>);
 
 #[parser]
-fn context<'a>(input: &mut Text<'a>) -> Result<TwoSpans<'a>, Text<'a>> {
+fn context<'a>(input: &mut Input<'a>) -> Result<'a, TwoSpans<'a>> {
     eat_slice("...")?;
     let first = parse_context!();
     eat('\n')?;
@@ -72,7 +74,7 @@ fn context<'a>(input: &mut Text<'a>) -> Result<TwoSpans<'a>, Text<'a>> {
 }
 
 #[parser]
-fn resetting_context<'a>(input: &mut Text<'a>) -> Result<TwoSpans<'a>, Text<'a>> {
+fn resetting_context<'a>(input: &mut Input<'a>) -> Result<'a, TwoSpans<'a>> {
     eat_slice("...")?;
     let first = parse_context!();
     eat('\n')?;
@@ -84,7 +86,7 @@ fn resetting_context<'a>(input: &mut Text<'a>) -> Result<TwoSpans<'a>, Text<'a>>
 
 #[test]
 fn test_context() {
-    let (first, second) = parse!(context: &mut Text::from("...\n..")).unwrap();
+    let (first, second) = parse!(context: Input::new("...\n..")).unwrap();
 
     assert_eq!(first, Span {
         start: (1, 1, 0),
@@ -103,7 +105,7 @@ fn test_context() {
 
 #[test]
 fn test_resetting_context() {
-    let (first, second) = parse!(resetting_context: &mut Text::from("...\n..")).unwrap();
+    let (first, second) = parse!(resetting_context: Input::new("...\n..")).unwrap();
 
     assert_eq!(first, Span {
         start: (1, 1, 0),

@@ -1,4 +1,4 @@
-use pear::input::Text;
+use pear::input::{Pear, Text};
 use pear::{macros::*, parsers::*};
 
 type Result<'a, T> = pear::input::Result<T, Text<'a>>;
@@ -10,12 +10,12 @@ macro_rules! parse_me {
 }
 
 #[parser]
-fn combo<'a>(input: &mut Text<'a>) -> Result<'a, &'a str> {
+fn combo<'a>(input: &mut Pear<Text<'a>>) -> Result<'a, &'a str> {
     parse_me!(eat_slice("b")?)
 }
 
 #[test]
 fn text_contextualize() {
-    let result = parse!(combo: &mut Text::from("abc"));
+    let result = parse!(combo: Text::from("abc"));
     assert_eq!(result.unwrap(), "b");
 }
