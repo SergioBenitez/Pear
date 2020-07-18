@@ -132,12 +132,12 @@ fn wrapping_fn_block(
     let info_ident = parser_info_ident(function.sig.ident.span());
     let result_map = match args.raw.is_some() {
         true => quote_spanned!(span => (
-            |#info_ident, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
+            |#info_ident: &#scope::input::ParserInfo, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
                 #fn_block
             })
         ),
         false => quote_spanned!(span => (
-            |#info_ident, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
+            |#info_ident: &#scope::input::ParserInfo, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
                 use #scope::result::AsResult;
                 AsResult::as_result(#fn_block)
             }
@@ -164,7 +164,7 @@ fn wrapping_fn_block(
                 Ok(_) => { #peek },
                 Err(ref mut ___e) if #input.options.stacked_context => {
                     let ___ctxt = #scope::input::Input::context(#input, ___mark);
-                    ___e.push_context(___ctxt, ___info);
+                    ___e.push_info(___info, ___ctxt);
                     #rewind
                 },
                 Err(_) => { #rewind },
@@ -199,20 +199,12 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
         syn::ReturnType::Type(_, ty) => (**ty).clone(),
     };
 
-    // FIXME: Enforce that the type is `crate::input::Pear<_>`.
-    if !args.raw.is_some() {
-        let (input_ident, _) = extract_input_ident_ty(&function)?;
-        let input_expr = syn::Expr::Path(syn::ExprPath {
-            attrs: vec![],
-            qself: None,
-            path: input_ident.clone().into()
-        });
+    let (input_ident, _) = extract_input_ident_ty(&function)?;
+    let input_expr: syn::Expr = syn::parse2(quote!(#input_ident)).unwrap();
+    let mut transformer = ParserTransformer::new(input_expr, ret_ty.clone());
+    visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
 
-        let mut transformer = ParserTransformer::new(input_expr, ret_ty.clone());
-        visit_mut::visit_item_fn_mut(&mut transformer, &mut function);
-    }
-
-    let scope = match args.raw.is_some() { true => quote!(crate), false => quote!(::pear) };
+    let scope = args.raw.map(|_| quote!(crate)).unwrap_or_else(|| quote!(pear));
     let inline = syn::Attribute::parse_outer.parse2(quote!(#[inline])).unwrap();
     function.block = Box::new(wrapping_fn_block(&function, scope, args, &ret_ty)?);
     function.attrs.extend(inline);

@@ -95,9 +95,10 @@ macro_rules! iformat {
 /// Returns an `Err(ParseError::new($e))`. Can used like `format!` as well.
 #[macro_export]
 macro_rules! parse_error {
-    ([$n:expr; $i:expr; $m:expr; $T:ty] $err:expr) => {
-        Err($crate::error::ParseError::new($err))
-    };
+    ([$info:expr; $input:expr; $marker:expr; $T:ty] $err:expr) => ({
+        let context = $crate::parse_context!([$info; $input; $marker; $T]);
+        Err($crate::error::ParseError::new(*$info, $err, context))
+    });
     ([$n:expr; $i:expr; $m:expr; $T:ty] $fmt:expr, $($arg:tt)*) => {
         parse_error!([$n; $i; $m; $T] $crate::iformat!($fmt, $($arg)*))
     };

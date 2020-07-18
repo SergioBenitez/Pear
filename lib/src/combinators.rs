@@ -29,7 +29,7 @@ pub fn last_of_many<I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<O, I>
     where I: Input, P: FnMut(&mut Pear<I>) -> Result<O, I>
 {
     loop {
-        let output = p(input)?;
+        let output = p()?;
         if ok(input, eof).is_some() {
             return Ok(output);
         }
@@ -43,9 +43,9 @@ pub fn surrounded<I, O, F, P>(input: &mut Pear<I>, mut p: P, mut f: F) -> Result
           F: FnMut(&I::Token) -> bool,
           P: FnMut(&mut Pear<I>) -> Result<O, I>
 {
-    skip_while(input, &mut f)?;
-    let output = p(input)?;
-    skip_while(input, &mut f)?;
+    skip_while(&mut f)?;
+    let output = p()?;
+    skip_while(&mut f)?;
     Ok(output)
 }
 
@@ -61,7 +61,7 @@ pub fn collect<C, I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<C, I>
             return Ok(collection);
         }
 
-        collection.push(p(input)?);
+        collection.push(p()?);
     }
 }
 
@@ -73,7 +73,7 @@ pub fn collect_some<C, I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<C, I>
 {
     let mut collection = C::default();
     loop {
-        collection.push(p(input)?);
+        collection.push(p()?);
         if ok(input, eof).is_some() {
             return Ok(collection);
         }
@@ -128,7 +128,7 @@ pub fn delimited_collect<C, I, T, S, O, P>(
           S: Into<Option<T>>,
           P: FnMut(&mut Pear<I>) -> Result<O, I>,
 {
-    eat(input, start)?;
+    eat(start)?;
 
     let seperator = separator.into();
     let mut collection = C::default();
@@ -137,11 +137,11 @@ pub fn delimited_collect<C, I, T, S, O, P>(
             break;
         }
 
-        collection.push(item(input)?);
+        collection.push(item()?);
 
         if let Some(ref separator) = seperator {
             if ok(input, |i| eat(i, separator.clone())).is_none() {
-                eat(input, end.clone())?;
+                eat(end.clone())?;
                 break;
             }
         }
@@ -166,7 +166,7 @@ pub fn series<C, I, S, O, P>(
 {
     let mut collection = C::default();
     loop {
-        collection.push(item(input)?);
+        collection.push(item()?);
         if ok(input, |i| eat(i, seperator.clone())).is_none() {
             break;
         }
@@ -200,7 +200,7 @@ pub fn trailing_series<C, I, S, O, P>(
                 break
             }
         } else {
-            collection.push(item(input)?);
+            collection.push(item()?);
             have_some = true;
         }
 
