@@ -68,14 +68,7 @@ pub trait Input: Sized {
     #[allow(unused_variables)]
     fn mark(&mut self, info: &ParserInfo) -> Self::Marker;
 
-    /// Optionally returns a context to identify the input spanning from `mark`
-    /// until but excluding the current position. By default, this method
-    /// returns `None`, indicating that no context could be resolved.
-    fn context(&mut self, _mark: Self::Marker) -> Option<Self::Context> {
-        None
-    }
-
-    #[inline(always)]
-    #[allow(unused_variables)]
-    fn unmark(&mut self, info: &ParserInfo, success: bool, mark: Self::Marker) { }
+    /// Returns a context to identify the input spanning from `mark` until but
+    /// excluding the current position.
+    fn context(&mut self, _mark: Self::Marker) -> Self::Context;
 }

@@ -159,7 +159,7 @@ impl<'a> Input for Text<'a> {
         self.start.len() - self.current.len()
     }
 
-    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Self::Context {
         let cursor = self.token();
         let bytes_read = self.start.len() - self.current.len();
         let pos = if bytes_read == 0 {
@@ -185,7 +185,7 @@ impl<'a> Input for Text<'a> {
             Span { start, end, cursor, snippet }
         };
 
-        Some(pos)
+        pos
     }
 }
 

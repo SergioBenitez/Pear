@@ -79,6 +79,8 @@ macro_rules! _parse_declare {
 #[doc(hiden)]
 #[macro_export]
 macro_rules! iformat {
+    () => (iformat!("",));
+    ($fmt:expr) => (iformat!($fmt,));
     ($fmt:expr, $($arg:tt)*) => ({
         #[allow(unused_imports)]
         use std::fmt::Write;

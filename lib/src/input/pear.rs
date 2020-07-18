@@ -4,7 +4,7 @@ use crate::input::{Input, Rewind, ParserInfo};
 
 pub trait Debugger<I: Input> {
     fn on_entry(&mut self, info: &ParserInfo);
-    fn on_exit(&mut self, info: &ParserInfo, ok: bool, ctxt: Option<I::Context>);
+    fn on_exit(&mut self, info: &ParserInfo, ok: bool, ctxt: I::Context);
 }
 
 pub struct Options<I> {
@@ -146,13 +146,8 @@ impl<I: Input> Input for Pear<I> {
     }
 
     #[inline(always)]
-    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Self::Context {
         self.input.context(mark)
-    }
-
-    #[inline(always)]
-    fn unmark(&mut self, info: &ParserInfo, success: bool, mark: Self::Marker) {
-        self.input.unmark(info, success, mark)
     }
 }
 

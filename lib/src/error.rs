@@ -11,7 +11,7 @@ pub struct ParseError<C, E> {
 #[derive(Debug, Clone)]
 pub struct ParseContext<C> {
     pub parser: ParserInfo,
-    pub context: Option<C>,
+    pub context: C,
 }
 
 impl<C, E> ParseError<C, E> {
@@ -20,7 +20,7 @@ impl<C, E> ParseError<C, E> {
         ParseError { error, contexts: vec![] }
     }
 
-    pub fn push_context(&mut self, context: Option<C>, parser: ParserInfo) {
+    pub fn push_context(&mut self, context: C, parser: ParserInfo) {
         self.contexts.push(ParseContext { context, parser })
     }
 
@@ -38,9 +38,7 @@ impl<C: Show, E: std::fmt::Display> std::fmt::Display for ParseError<C, E> {
         write!(f, "{}", self.error)?;
         for ctxt in &self.contexts {
             write!(f, "\n + {}", ctxt.parser.name)?;
-            if let Some(ctxt) = &ctxt.context {
-                write!(f, " at {}", ctxt as &dyn Show)?;
-            }
+            write!(f, " {}", &ctxt.context as &dyn Show)?;
         }
 
         Ok(())

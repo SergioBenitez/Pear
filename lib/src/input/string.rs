@@ -95,8 +95,8 @@ impl<'a> Input for &'a str {
         *self
     }
 
-    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Self::Context {
         let consumed = mark.len() - self.len();
-        Some(&mark[..consumed])
+        &mark[..consumed]
     }
 }

@@ -70,7 +70,7 @@ fn context<'a>(input: &mut Input<'a>) -> Result<'a, TwoSpans<'a>> {
     eat('\n')?;
     eat_slice("..")?;
     let second = parse_context!();
-    (first.unwrap(), second.unwrap())
+    (first, second)
 }
 
 #[parser]
@@ -81,7 +81,7 @@ fn resetting_context<'a>(input: &mut Input<'a>) -> Result<'a, TwoSpans<'a>> {
     parse_mark!();
     eat_slice("..")?;
     let second = parse_context!();
-    (first.unwrap(), second.unwrap())
+    (first, second)
 }
 
 #[test]

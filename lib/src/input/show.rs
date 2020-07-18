@@ -48,6 +48,17 @@ impl<T: Show + ?Sized> Show for &T {
     }
 }
 
+impl<T: Show> Show for Option<T> {
+    #[inline(always)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(val) = self {
+            <T as Show>::fmt(val, f)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl<T: Show> Show for [T] {
     #[inline(always)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

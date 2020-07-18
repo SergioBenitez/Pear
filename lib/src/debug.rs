@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use inlinable_string::InlinableString;
 
 use crate::input::{Show, Input, Debugger, ParserInfo};
 use crate::macros::is_parse_debug;
@@ -97,15 +98,13 @@ impl Tree<Info> {
             None => ::yansi::Color::Unset,
         };
 
-        let ctxt = info.context.as_ref().map(|s| s.as_str()).unwrap_or("");
-
         #[cfg(feature = "color")]
         println!("{} ({})",
             color.paint(format!("{}{}", info.parser.name, success)),
-            ctxt);
+            info.context);
 
         #[cfg(not(feature = "color"))]
-        println!("{}{} ({})", info.name, success, ctxt);
+        println!("{}{} ({})", info.name, success, info.context);
 
         let children = self.get_children(node);
         let num_children = children.len();
@@ -120,13 +119,13 @@ impl Tree<Info> {
 
 struct Info {
     parser: ParserInfo,
-    context: Option<String>,
+    context: InlinableString,
     success: Option<bool>,
 }
 
 impl Info {
     fn new(parser: ParserInfo) -> Self {
-        Info { parser, context: None, success: None }
+        Info { parser, context: iformat!(), success: None }
     }
 }
 
@@ -149,7 +148,7 @@ impl<I: Input> Debugger<I> for TreeDebugger {
         self.tree.push(Info::new(*p));
     }
 
-    fn on_exit(&mut self, p: &ParserInfo, ok: bool, ctxt: Option<I::Context>) {
+    fn on_exit(&mut self, p: &ParserInfo, ok: bool, ctxt: I::Context) {
         if !((p.raw && is_parse_debug!("full")) || (!p.raw && is_parse_debug!())) {
             return;
         }
@@ -158,7 +157,7 @@ impl<I: Input> Debugger<I> for TreeDebugger {
         if let Some(last_node) = index {
             let last = self.tree.get_mut(last_node);
             last.success = Some(ok);
-            last.context = ctxt.map(|ref ctxt| format!("{}", ctxt as &dyn Show));
+            last.context = iformat!("{}", &ctxt as &dyn Show);
         }
 
         // We've reached the end. Print the whole thing and clear the tree.

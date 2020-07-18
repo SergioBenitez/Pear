@@ -177,7 +177,6 @@ fn wrapping_fn_block(
                 }
             }
 
-            #scope::input::Input::unmark(#input, &___info, ___res.is_ok(), ___mark);
             ___res
         })
     };

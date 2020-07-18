@@ -258,10 +258,10 @@ impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
     /// Optionally returns a context to identify the current input position. By
     /// default, this method returns `None`, indicating that no context could be
     /// resolved.
-    fn context(&mut self, mark: Self::Marker) -> Option<Self::Context> {
+    fn context(&mut self, mark: Self::Marker) -> Self::Context {
         let end = self.offset();
         let values = self.start.slice(mark..end).unwrap();
-        Some(Extent { start: mark, end, values })
+        Extent { start: mark, end, values }
     }
 }
 
