@@ -67,7 +67,14 @@ impl<T: Show> Show for [T] {
             write!(f, "{}", value as &dyn Show)?;
         }
 
-        write!(f, ")")
+        Ok(())
+    }
+}
+
+impl<T: Show + ?Sized + ToOwned> Show for std::borrow::Cow<'_, T> {
+    #[inline(always)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Show::fmt(self.as_ref(), f)
     }
 }
 
@@ -90,17 +97,23 @@ impl_for_slice_len!(
 impl<T: Show> Show for Vec<T> {
     #[inline(always)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, value) in self.iter().enumerate() {
-            if i > 0 { write!(f, " ")?; }
-            write!(f, "{}", value as &dyn Show)?;
-        }
+        Show::fmt(self.as_slice(), f)
+    }
+}
 
-        write!(f, ")")
+impl Show for u8 {
+    #[inline(always)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_ascii() {
+            write!(f, "{}", char::from(*self).escape_debug())
+        } else {
+            write!(f, "byte {}", self)
+        }
     }
 }
 
 impl_show_with! { Debug,
-    u8, u16, u32, u64, u128, usize,
+        u16, u32, u64, u128, usize,
     i8, i16, i32, i64, i128, isize
 }
 

@@ -80,6 +80,16 @@ impl<T: Show> Show for Extent<T> {
     }
 }
 
+impl<T: ?Sized + ToOwned> Extent<&T> {
+    pub fn into_owned(self) -> Extent<T::Owned> {
+        Extent {
+            start: self.start,
+            end: self.end,
+            values: self.values.to_owned(),
+        }
+    }
+}
+
 pub trait Indexable: Sized {
     type One: Clone;
     type Iter: Iterator<Item = Self::One>;
