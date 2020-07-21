@@ -363,12 +363,12 @@ pub fn parser(
 ) -> proc_macro::TokenStream {
     let args = match AttrArgs::syn_parse.parse(args) {
         Ok(args) => args,
-        Err(e) => return Diagnostic::from(e).emit_as_tokens().into(),
+        Err(e) => return Diagnostic::from(e).emit_as_item_tokens().into(),
     };
 
     match parser_attribute(input, &args) {
         Ok(tokens) => tokens.into(),
-        Err(diag) => diag.emit_as_tokens().into(),
+        Err(diag) => diag.emit_as_item_tokens().into(),
     }
 }
 
@@ -389,6 +389,6 @@ pub fn switch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // way to get a SynParseStream from a TokenStream to not do that.
     match Switch::syn_parse.parse(input) {
         Ok(switch) => switch.to_tokens().into(),
-        Err(e) => Diagnostic::from(e).emit_as_tokens().into(),
+        Err(e) => Diagnostic::from(e).emit_as_expr_tokens().into(),
     }
 }
