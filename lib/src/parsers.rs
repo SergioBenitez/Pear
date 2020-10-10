@@ -3,11 +3,10 @@ use crate::input::{Input, Pear, Length, Token, Slice, Show, Result, Rewind};
 use crate::combinators::succeeds;
 use crate::macros::parser;
 
-// // TODO:
-// // * provide basic parsers in pear
-// //   - [f32, f64, i8, i32, ..., bool, etc.]: one for all reasonable built-ins
-// //   - quoted_string(allowed): '"' allowed* '"'
-// //   - escaped string, with some way to configure escapes
+// TODO: provide more basic parsers in pear
+//   - [f32, f64, i8, i32, ..., bool, etc.]: one for all reasonable built-ins
+//   - quoted_string(allowed): '"' allowed* '"'
+//   - escaped string, with some way to configure escapes
 
 #[inline]
 fn expected_token<T, I>(

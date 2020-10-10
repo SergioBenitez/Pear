@@ -2,7 +2,7 @@
 name = "http_version"
 version = "0.0.0"
 workspace = "../../"
+publish = false
 
 [dependencies]
 pear = { path = "../../lib" }
-pear_codegen = { path = "../../codegen" }

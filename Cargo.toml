@@ -4,10 +4,7 @@ members = [
   "codegen/",
   "examples/ini",
   "examples/group",
-  # "examples/http",
-  # "examples/media_type",
-  # "examples/exprs",
+  "examples/http",
   "examples/parens",
   "examples/json",
-  # "examples/uri",
 ]
