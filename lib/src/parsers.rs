@@ -1,6 +1,6 @@
 use crate::error::Expected;
 use crate::input::{Input, Pear, Length, Token, Slice, Show, Result, Rewind};
-use crate::combinators::ok;
+use crate::combinators::succeeds;
 use crate::macros::parser;
 
 // // TODO:
@@ -225,11 +225,11 @@ pub fn take_while_window<I, F>(input: &mut Pear<I>, n: usize, mut f: F) -> Resul
         // See `take_while_slice` for  an explanation of these arms.
         match input.slice(n) {
             Some(ref slice) if f(slice) => {
-                if ok(input, skip_any).is_none() { break; }
+                if !succeeds(input, skip_any) { break; }
                 tokens += 1;
             }
             None if input.has(n + 1) => {
-                if ok(input, skip_any).is_none() { break; }
+                if !succeeds(input, skip_any) { break; }
                 tokens += 1;
             }
             _ => break,

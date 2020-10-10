@@ -13,6 +13,8 @@ pub trait Collection<A>: Default + Extend<A> {
 
 impl<A, T: Default + Extend<A>> Collection<A> for T {  }
 
+/// Parses `p`, returning `Some` if it succeeds and `None` if it fails. Discards
+/// the error message.
 pub fn ok<I, P, O>(input: &mut Pear<I>, p: P) -> Option<O>
     where I: Input, P: FnOnce(&mut Pear<I>) -> Result<O, I>
 {
@@ -23,6 +25,14 @@ pub fn ok<I, P, O>(input: &mut Pear<I>, p: P) -> Option<O>
     ok
 }
 
+/// Parses `p`, returning `true` if it succeeds and `false` if it fails.
+/// Discards the error message.
+pub fn succeeds<I, P, O>(input: &mut Pear<I>, p: P) -> bool
+    where I: Input, P: FnOnce(&mut Pear<I>) -> Result<O, I>
+{
+    ok(input, p).is_some()
+}
+
 /// Parses `p` until `p` fails, returning the last successful `p`.
 #[parser(raw)]
 pub fn last_of_many<I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<O, I>
@@ -30,7 +40,7 @@ pub fn last_of_many<I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<O, I>
 {
     loop {
         let output = p()?;
-        if ok(input, eof).is_some() {
+        if succeeds(input, eof) {
             return Ok(output);
         }
     }
@@ -57,7 +67,7 @@ pub fn collect<C, I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<C, I>
 {
     let mut collection = C::default();
     loop {
-        if ok(input, eof).is_some() {
+        if succeeds(input, eof) {
             return Ok(collection);
         }
 
@@ -74,7 +84,7 @@ pub fn collect_some<C, I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<C, I>
     let mut collection = C::default();
     loop {
         collection.push(p()?);
-        if ok(input, eof).is_some() {
+        if succeeds(input, eof) {
             return Ok(collection);
         }
     }
@@ -88,7 +98,7 @@ pub fn try_collect<C, I, O, P>(input: &mut Pear<I>, mut p: P) -> Result<C, I>
 {
     let mut collection = C::default();
     loop {
-        if eof(input).is_ok() {
+        if succeeds(input, eof) {
             return Ok(collection);
         }
 
@@ -133,14 +143,14 @@ pub fn delimited_collect<C, I, T, S, O, P>(
     let seperator = separator.into();
     let mut collection = C::default();
     loop {
-        if ok(input, |i| eat(i, end.clone())).is_some() {
+        if succeeds(input, |i| eat(i, end.clone())) {
             break;
         }
 
         collection.push(item()?);
 
         if let Some(ref separator) = seperator {
-            if ok(input, |i| eat(i, separator.clone())).is_none() {
+            if !succeeds(input, |i| eat(i, separator.clone())) {
                 eat(end.clone())?;
                 break;
             }
@@ -167,7 +177,7 @@ pub fn series<C, I, S, O, P>(
     let mut collection = C::default();
     loop {
         collection.push(item()?);
-        if ok(input, |i| eat(i, seperator.clone())).is_none() {
+        if !succeeds(input, |i| eat(i, seperator.clone())) {
             break;
         }
     }
@@ -204,7 +214,7 @@ pub fn trailing_series<C, I, S, O, P>(
             have_some = true;
         }
 
-        if eat(input, seperator.clone()).is_err() {
+        if !succeeds(input, |i| eat(i, seperator.clone())) {
             break;
         }
     }
@@ -228,7 +238,7 @@ pub fn prefixed_series<C, I, T, O, P>(
           T: Token<I> + Clone,
           P: FnMut(&mut Pear<I>) -> Result<O, I>,
 {
-    if ok(input, |i| eat(i, prefix)).is_none() {
+    if !succeeds(input, |i| eat(i, prefix)) {
         return Ok(C::default());
     }
 

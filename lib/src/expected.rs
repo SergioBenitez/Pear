@@ -128,10 +128,10 @@ impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
                 write!(f, "unexpected token: {}", found)
             }
             Expected::Token(Some(ref expected), None) => {
-                write!(f, "expected token {} but none was found", expected)
+                write!(f, "unexpected EOF: expected token {}", expected)
             }
             Expected::Token(None, None) => {
-                write!(f, "expected any token but none was found")
+                write!(f, "unexpected EOF: expected some token")
             }
             Expected::Slice(Some(ref expected), Some(ref found)) => {
                 let found = found as &dyn Show;
@@ -142,10 +142,10 @@ impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
                 write!(f, "unexpected slice: {}", found)
             }
             Expected::Slice(Some(ref expected), None) => {
-                write!(f, "expected slice {} but none was found", expected)
+                write!(f, "unexpected EOF: expected slice {}", expected)
             }
             Expected::Slice(None, None) => {
-                write!(f, "expected any slice but none was found")
+                write!(f, "unexpected EOF: expected some slice")
             }
             Expected::Eof(None) => {
                 write!(f, "expected EOF but input remains")
