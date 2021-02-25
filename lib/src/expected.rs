@@ -41,6 +41,24 @@ pub enum Expected<Token, Slice> {
 }
 
 impl<Token, Slice> Expected<Token, Slice> {
+    pub fn token<T: Show>(expected: Option<&T>, found: Option<Token>) -> Self {
+        let expected = expected.map(|t| iformat!("{}", t as &dyn Show));
+        Expected::Token(expected, found)
+    }
+
+    pub fn eof(found: Option<Token>) -> Self {
+        Expected::Eof(found)
+    }
+}
+
+impl<Token, Slice> Expected<Token, Slice> {
+    pub fn slice<S: Show>(expected: Option<&S>, found: Option<Slice>) -> Self {
+        let expected = expected.map(|t| iformat!("{}", t as &dyn Show));
+        Expected::Slice(expected, found)
+    }
+}
+
+impl<Token, Slice> Expected<Token, Slice> {
     pub fn map<FT, FS, T, S>(self, t: FT, s: FS) -> Expected<T, S>
         where FT: Fn(Token) -> T, FS: Fn(Slice) -> S
     {

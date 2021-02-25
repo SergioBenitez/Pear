@@ -1,5 +1,5 @@
 use crate::error::Expected;
-use crate::input::{Input, Pear, Length, Token, Slice, Show, Result, Rewind};
+use crate::input::{Input, Pear, Length, Token, Slice, Result, Rewind};
 use crate::combinators::succeeds;
 use crate::macros::parser;
 
@@ -15,11 +15,9 @@ fn expected_token<T, I>(
 ) -> Expected<I::Token, I::Slice>
     where T: Token<I>, I: Input
 {
+    // TODO: Have some way to test this is being called minimally.
     if input.emit_error {
-        // TODO: Have some way to test this is being called minimally.
-        // println!("Expected token.");
-        let string = token.map(|t| iformat!("{}", &t as &dyn Show));
-        Expected::Token(string, input.token())
+        Expected::token(token.as_ref(), input.token())
     } else {
         Expected::Elided
     }
@@ -32,11 +30,9 @@ fn expected_slice<S, I>(
 ) -> Expected<I::Token, I::Slice>
     where S: Slice<I>, I: Input
 {
+    // TODO: Have some way to test this is being called minimally.
     if input.emit_error {
-        // TODO: Have some way to test this is being called minimally.
-        // println!("Expected slice.");
-        let string = iformat!("{}", &slice as &dyn Show);
-        Expected::Slice(Some(string), input.slice(slice.len()))
+        Expected::slice(Some(&slice), input.slice(slice.len()))
     } else {
         Expected::Elided
     }

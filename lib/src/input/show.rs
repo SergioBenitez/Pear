@@ -75,7 +75,7 @@ impl Show for u8 {
     #[inline(always)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_ascii() {
-            write!(f, "{}", char::from(*self).escape_debug())
+            write!(f, "'{}'", char::from(*self).escape_debug())
         } else {
             write!(f, "byte {}", self)
         }
