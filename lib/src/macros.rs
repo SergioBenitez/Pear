@@ -76,7 +76,7 @@ macro_rules! _parse_declare {
 }
 
 /// Like `format!` but tries to inline the string.
-#[doc(hiden)]
+#[doc(hidden)]
 #[macro_export]
 macro_rules! iformat {
     () => (iformat!("",));
