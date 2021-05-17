@@ -166,6 +166,16 @@ impl<T: Length> Cursor<T> {
     }
 }
 
+impl<T: Indexable + Length> Cursor<T> {
+    /// Returns an `Extent` that spans from `a` to `b` if `a..b` is in bounds.
+    pub fn span(&self, a: Extent<T>, b: Extent<T>) -> Option<Extent<T>> {
+        let start = std::cmp::min(a.start, b.start);
+        let end = std::cmp::max(a.end, b.end);
+        let values = self.start.slice(start..end)?;
+        Some(Extent { start, end, values })
+    }
+}
+
 impl<T: Indexable + Show + Length + PartialEq> Input for Cursor<T>
     where T::One: Show + PartialEq
 {

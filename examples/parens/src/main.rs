@@ -9,7 +9,10 @@ parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 #[parser]
 fn parens<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<(), I> {
     eat('(')?;
-    parse_try!(parens());
+    pear::macros::switch! {
+        _ if true => parens()?,
+        _ => parens()?
+    }
     eat(')')?;
 }
 

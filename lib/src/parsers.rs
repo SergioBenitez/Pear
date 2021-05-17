@@ -143,6 +143,17 @@ pub fn peek_slice<I, S>(input: &mut Pear<I>, slice: S) -> Result<(), I>
     }
 }
 
+/// Succeeds if the current slice is `slice`.
+#[parser(raw)]
+pub fn peek_slice_if<I, F>(input: &mut Pear<I>, len: usize, cond: F) -> Result<(), I>
+    where I: Input, F: FnMut(&I::Slice) -> bool
+{
+    match input.peek_slice(len, cond) {
+        true => Ok(()),
+        false => return parse_error!(Expected::Slice(None, None)),
+    }
+}
+
 /// Returns the current token.
 #[parser(raw)]
 pub fn peek_any<I: Input>(input: &mut Pear<I>) -> Result<I::Token, I> {
@@ -167,6 +178,12 @@ pub fn take_while<I, F>(input: &mut Pear<I>, cond: F) -> Result<I::Many, I>
     where I: Input, F: FnMut(&I::Token) -> bool
 {
     Ok(input.take(cond))
+}
+
+/// Consumes no tokens. Always succeeds. Equivalent to `take_while(|_| false)`.
+#[parser(raw)]
+pub fn none<I: Input>(input: &mut Pear<I>) -> Result<I::Many, I> {
+    take_while(input, |_| false)
 }
 
 /// Consumes tokens while `cond` matches on a continously growing slice
@@ -413,38 +430,39 @@ pub fn eof<I: Input>(input: &mut Pear<I>) -> Result<(), I> {
     })
 }
 
-// // Like delimited, but keeps the start and end tokens.
-// #[parser(raw)]
-// pub fn enclosed<I: Input, F>(
-//     input: &mut Pear<I>,
-//     start: I::Token,
-//     mut cond: F,
-//     end: I::Token
-// ) -> Result<I::Many, I>
-//     where F: FnMut(&I::Token) -> bool
-// {
-//     let mut phase = 0;
-//     let output = take_some_while(input, |c| {
-//         match phase {
-//             0 => {
-//                 phase = 1;
-//                 c == &start
-//             }
-//             1 => if cond(c) {
-//                 true
-//             } else if c == &end {
-//                 phase = 2;
-//                 true
-//             } else {
-//                 false
-//             }
-//             _ => false
-//         }
-//     });
+/// Like `delimited` but keeps the `start` and `end`.
+#[parser(raw)]
+pub fn enclosed<I, T, F>(
+    input: &mut Pear<I>,
+    start: T,
+    mut cond: F,
+    end: T,
+) -> Result<I::Many, I>
+    where I: Input,
+          T: Token<I>,
+          F: FnMut(&I::Token) -> bool
+{
+    enum State {
+        Start,
+        Inner,
+        End
+    }
 
-//     match phase {
-//         0 => error(input, "enclosed", Expected::Token(Some(start), None)),
-//         1 => error(input, "enclosed", Expected::Token(Some(end), None)),
-//         _ => output
-//     }
-// }
+    let mut state = State::Start;
+    let value = input.take(|t| {
+        match state {
+            State::Start if &start == t => { state = State::Inner; true },
+            State::Start => false,
+            State::Inner if cond(t) => true,
+            State::Inner if &end == t => { state = State::End; true },
+            State::Inner => false,
+            State::End => false,
+        }
+    });
+
+    match state {
+        State::Start => parse_error!(expected_token(input, Some(start))),
+        State::Inner => parse_error!(expected_token(input, Some(end))),
+        State::End => Ok(value)
+    }
+}

@@ -130,7 +130,7 @@ macro_rules! parse_mark {
     }}
 }
 
-/// Returns the current context up to the current mark.
+/// Returns the context from the current mark to the input position inclusive.
 ///
 /// Invoked with no arguments: `parse_context!()`
 #[macro_export]
@@ -156,6 +156,9 @@ macro_rules! parse_try {
     }};
     ([$n:expr; $input:ident; $m:expr; $T:ty] $e:expr => $r:expr) => {{
         $crate::macros::switch! { [$n;$input;$m;$T] $e => { Some($r) }, _ => { None } }
+    }};
+    ([$n:expr; $input:ident; $m:expr; $T:ty] $e:expr => $r:expr => || $f:expr) => {{
+        $crate::macros::switch! { [$n;$input;$m;$T] $e => { $r }, _ => { $f } }
     }};
     ([$n:expr; $input:ident; $m:expr; $T:ty] $pat:ident@$e:expr => $r:expr) => {{
         $crate::macros::switch! { [$n;$input;$m;$T] $pat@$e => { Some($r) }, _ => { None } }

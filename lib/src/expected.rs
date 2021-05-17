@@ -170,7 +170,7 @@ impl<T: Show, S: Show> fmt::Display for Expected<T, S> {
             }
             Expected::Eof(Some(ref found)) => {
                 let found = found as &dyn Show;
-                write!(f, "expected EOF but found {}", found)
+                write!(f, "unexpected token {}", found)
             }
             Expected::Other(ref other) => write!(f, "{}", other),
             Expected::Elided => write!(f, "[ERROR ELIDED]")

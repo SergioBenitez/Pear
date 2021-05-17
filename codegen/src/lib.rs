@@ -227,46 +227,56 @@ impl Case {
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
 
         match this.pattern {
-            Pattern::Wild(..) => quote!(#case_expr),
+            Pattern::Wild(..) => match this.guard.as_ref() {
+                Some(guard) => {
+                    let rest_tokens = Case::to_tokens(context, cases);
+                    quote!(if #guard { #case_expr } else { #rest_tokens })
+                }
+                None => quote!(#case_expr),
+            }
             Pattern::Calls(ref calls) => {
-                let prefix = (0..calls.len()).into_iter().map(|i| {
-                    match i {
+                let case_branch = calls.iter().enumerate().map(|(i, call)| {
+                    let prefix = match i {
                         0 => quote!(if),
                         _ => quote!(else if)
-                    }
-                });
+                    };
 
-                let name = calls.iter().map(|call| {
-                    call.name.as_ref()
-                        .map(|c| c.clone())
-                        .unwrap_or(syn::Ident::new("_", call.span()))
-                });
+                    let name = call.name.clone()
+                        .unwrap_or_else(|| syn::Ident::new("___", call.span()));
 
-                // FIXME: We're repeating ourselves, aren't we? We alrady do
-                // this in the visitor.
-                let call_expr = calls.iter().map(|call| {
-                    let mut call = call.expr.clone();
-                    call.args.insert(0, input.clone());
-                    quote!({
+                    // FIXME: We're repeating ourselves, aren't we? We alrady do
+                    // this in input insertion in the visitor.
+                    let mut call_expr = call.expr.clone();
+                    call_expr.args.insert(0, input.clone());
+                    let call_expr = quote!({
                         let ___preserve_error = #input.emit_error;
                         #input.emit_error = false;
-                        let ___call_result = #call;
+                        let ___call_result = #call_expr;
                         #input.emit_error = ___preserve_error;
                         ___call_result
-                    })
-                });
+                    });
 
-                let case_expr = ::std::iter::repeat(&case_expr);
-                let rest_tokens = Case::to_tokens(context, cases);
+                    let guarded_call = this.guard.as_ref()
+                        .map(|guard| &guard.expr)
+                        .map(|guard| quote!({
+                            match #call_expr {
+                                Ok(#name) if #guard => Some(#name),
+                                _ => None,
+                            }
+                        }))
+                        .unwrap_or_else(|| quote!(#call_expr.ok()));
 
-                quote_spanned! { this.span =>
-                    #(
-                        #prefix let Some(#name) = #call_expr.ok() {
+                    quote! {
+                        #prefix let Some(#name) = #guarded_call {
                             #case_expr
                         }
-                     )* else {
-                        #rest_tokens
                     }
+                });
+
+                let rest_tokens = Case::to_tokens(context, cases);
+                quote_spanned! { this.span =>
+                    #(#case_branch)*
+                    else { #rest_tokens }
                 }
             }
         }

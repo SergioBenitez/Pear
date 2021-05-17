@@ -69,16 +69,31 @@ impl quote::ToTokens for CallPattern {
     }
 }
 
+impl quote::ToTokens for Guard {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        self.expr.to_tokens(tokens)
+    }
+}
+
+type CallPatterns = Punctuated<CallPattern, Token![|]>;
+
 #[derive(Debug)]
 pub enum Pattern {
     Wild(Token![_]),
-    Calls(Punctuated<CallPattern, Token![|]>)
+    Calls(CallPatterns),
+}
+
+#[derive(Debug)]
+pub struct Guard {
+    pub _if: Token![if],
+    pub expr: syn::Expr,
 }
 
 #[derive(Debug)]
 pub struct Case {
     pub pattern: Pattern,
     pub expr: syn::Expr,
+    pub guard: Option<Guard>,
     pub span: Span,
 }
 
@@ -121,9 +136,27 @@ impl Parse for CallPattern {
     }
 }
 
-impl Pattern {
-    fn validate(&self) -> PResult<()> {
-        if let Pattern::Calls(ref calls) = self {
+impl Parse for Guard {
+    fn parse(input: SynParseStream) -> PResult<Self> {
+        Ok(Guard {
+            _if: input.parse()?,
+            expr: input.parse()?,
+        })
+    }
+}
+
+impl Parse for Pattern {
+    fn parse(input: SynParseStream) -> PResult<Self> {
+        type CallPatterns = Punctuated<CallPattern, Token![|]>;
+
+        // Parse the pattern.
+        let pattern = match input.parse::<Token![_]>() {
+            Ok(wild) => Pattern::Wild(wild),
+            Err(_) => Pattern::Calls(input.call(CallPatterns::parse_separated_nonempty)?)
+        };
+
+        // Validate the pattern.
+        if let Pattern::Calls(ref calls) = pattern {
             let first_name = calls.first().and_then(|call| call.name.clone());
             for call in calls.iter() {
                 if first_name != call.name {
@@ -145,29 +178,26 @@ impl Pattern {
             }
         }
 
-        Ok(())
+        Ok(pattern)
     }
 }
 
 impl Parse for Case {
     fn parse(input: SynParseStream) -> PResult<Self> {
         let case_span_start = input.cursor().span();
-
-        let pattern = if let Ok(wild) = input.parse::<Token![_]>() {
-            Pattern::Wild(wild)
-        } else {
-            let call_patterns =
-                input.call(<Punctuated<CallPattern, Token![|]>>::parse_separated_nonempty)?;
-
-            Pattern::Calls(call_patterns)
+        let pattern = Pattern::parse(input)?;
+        let guard = match input.peek(Token![if]) {
+            true => Some(Guard::parse(input)?),
+            false => None,
         };
 
-        pattern.validate()?;
         input.parse::<Token![=>]>()?;
         let expr: syn::Expr = input.parse()?;
-        let span = case_span_start.join(input.cursor().span()).unwrap_or(case_span_start);
+        let span = case_span_start
+            .join(input.cursor().span())
+            .unwrap_or(case_span_start);
 
-        Ok(Case { pattern, expr, span })
+        Ok(Case { pattern, expr, guard, span, })
     }
 }
 
@@ -210,7 +240,9 @@ impl Parse for Switch {
 
         for case in cases.iter().take(cases.len() - 1) {
             if let Pattern::Wild(..) = case.pattern {
-                Err(case.span.error("`_` matches can only appear as the last case"))?;
+                if case.guard.is_none() {
+                    Err(case.span.error("unguarded `_` can only appear as the last case"))?;
+                }
             }
         }
 
