@@ -1,7 +1,7 @@
 #![warn(rust_2018_idioms)]
 
 use pear::input::{Text, Pear, Result};
-use pear::macros::{parser, parse, parse_declare, parse_try};
+use pear::macros::{parser, parse, parse_declare};
 use pear::parsers::*;
 
 parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
@@ -9,10 +9,13 @@ parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
 #[parser]
 fn parens<'a, I: Input<'a>>(input: &mut Pear<I>) -> Result<(), I> {
     eat('(')?;
+
+    // parse_try!(parens());
     pear::macros::switch! {
         _ if true => parens()?,
         _ => parens()?
     }
+
     eat(')')?;
 }
 
