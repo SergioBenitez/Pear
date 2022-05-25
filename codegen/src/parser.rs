@@ -7,7 +7,7 @@ use proc_macro2::Delimiter;
 use spanned::Spanned;
 
 #[derive(Debug)]
-crate struct Diagnostic(crate ::proc_macro::Diagnostic);
+pub(crate) struct Diagnostic(crate ::proc_macro::Diagnostic);
 
 impl Diagnostic {
     pub fn emit(self) {
@@ -49,9 +49,9 @@ impl ::std::ops::Deref for Diagnostic {
     }
 }
 
-crate type PResult<T> = Result<T, Diagnostic>;
+pub(crate) type PResult<T> = Result<T, Diagnostic>;
 
-crate trait Parse: Sized {
+pub(crate) trait Parse: Sized {
     fn parse(input: syn::parse::ParseStream) -> PResult<Self>;
 
     fn syn_parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
@@ -92,9 +92,9 @@ impl<'a> ParseStreamExt for SynParseStream<'a> {
 }
 
 #[derive(Debug)]
-crate struct CallPattern {
-    crate name: Option<syn::Ident>,
-    crate expr: syn::ExprCall,
+pub(crate) struct CallPattern {
+    pub(crate) name: Option<syn::Ident>,
+    pub(crate) expr: syn::ExprCall,
 }
 
 impl syn::parse::Parse for CallPattern {
@@ -112,23 +112,23 @@ impl Spanned for CallPattern {
 }
 
 #[derive(Debug)]
-crate enum Pattern {
+pub(crate) enum Pattern {
     Wild(Token![_]),
     Calls(Punctuated<CallPattern, Token![|]>)
 }
 
 #[derive(Debug)]
-crate struct Case {
-    crate pattern: Pattern,
-    crate expr: syn::Expr,
-    crate span: Span,
+pub(crate) struct Case {
+    pub(crate) pattern: Pattern,
+    pub(crate) expr: syn::Expr,
+    pub(crate) span: Span,
 }
 
 #[derive(Debug)]
-crate struct Switch {
-    crate parser_name: syn::Ident,
-    crate input: syn::Expr,
-    crate cases: Punctuated<Case, Token![,]>
+pub(crate) struct Switch {
+    pub(crate) parser_name: syn::Ident,
+    pub(crate) input: syn::Expr,
+    pub(crate) cases: Punctuated<Case, Token![,]>
 }
 
 // FIXME(syn): Something like this should be in `syn`

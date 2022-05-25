@@ -54,8 +54,8 @@ pub trait Input: Sized {
     type Context: Display;
 
     fn peek(&mut self) -> Option<Self::Token>;
-    fn peek_slice(&mut self, Self::InSlice) -> Option<Self::Slice>;
-    fn advance(&mut self, usize);
+    fn peek_slice(&mut self, _in: Self::InSlice) -> Option<Self::Slice>;
+    fn advance(&mut self, _n: usize);
     fn is_empty(&mut self) -> bool;
     fn take_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> Self::Many;
     fn skip_many<F: FnMut(Self::Token) -> bool>(&mut self, cond: F) -> usize;

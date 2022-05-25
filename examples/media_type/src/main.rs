@@ -15,7 +15,7 @@ struct MediaType<'s> {
 #[inline]
 fn is_valid_token(c: char) -> bool {
     match c {
-        '0'...'9' | 'a'...'z' | '^'...'~' | '#'...'\''
+        '0'..='9' | 'a'..='z' | '^'..='~' | '#'..='\''
             | '!' | '*' | '+' | '-' | '.'  => true,
         _ => false
     }

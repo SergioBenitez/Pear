@@ -67,7 +67,7 @@ fn is_whitespace(byte: char) -> bool {
 
 #[inline]
 fn is_num_char(byte: char) -> bool {
-    match byte { '0'...'9' | '.' => true, _ => false }
+    match byte { '0'..='9' | '.' => true, _ => false }
 }
 
 pear_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));
@@ -100,7 +100,7 @@ fn heading<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
 
 #[parser]
 fn name<'a, I: Input<'a>>(input: &mut I) -> Result<&'a str, I> {
-    take_some_while(|c| !"=\n;".contains(c))?.trim_right()
+    take_some_while(|c| !"=\n;".contains(c))?.trim_end()
 }
 
 #[parser]
