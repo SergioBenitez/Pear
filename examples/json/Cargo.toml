@@ -9,7 +9,7 @@ pear = { path = "../../lib" }
 pear_codegen = { path = "../../codegen" }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 
 [[bench]]
 name = "json"

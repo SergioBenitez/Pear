@@ -101,7 +101,7 @@ fn extract_input_ident_ty(f: &syn::ItemFn) -> PResult<(syn::Ident, syn::Type)> {
     use syn::{FnArg::Typed, PatType, Pat::Ident, Type::Reference};
 
     let first = f.sig.inputs.first().ok_or_else(|| {
-        let paren_span = f.sig.paren_token.span;
+        let paren_span = f.sig.paren_token.span.join();
         paren_span.error("parsing functions require at least one input")
     })?;
 

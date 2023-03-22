@@ -107,8 +107,8 @@ pub struct Switch {
 fn parse_expr_call(input: SynParseStream) -> syn::parse::Result<syn::ExprCall> {
     let path: syn::ExprPath = input.parse()?;
     let paren_span = input.cursor().span();
-    let args: Punctuated<syn::Expr, Token![,]> = input.parse_group(Delimiter::Parenthesis, |i| {
-        i.parse_terminated(syn::Expr::parse)
+    let args = input.parse_group(Delimiter::Parenthesis, |i| {
+        i.parse_terminated(syn::Expr::parse, Token![,])
     })?;
 
     Ok(syn::ExprCall {
@@ -229,7 +229,7 @@ impl Parse for Context {
 impl Parse for Switch {
     fn parse(stream: SynParseStream) -> PResult<Switch> {
         let context = stream.try_parse(Context::syn_parse)?;
-        let cases: Punctuated<Case, Token![,]> = stream.parse_terminated(Case::syn_parse)?;
+        let cases = stream.parse_terminated(Case::syn_parse, Token![,])?;
         if !stream.is_empty() {
             Err(stream.error("trailing characters; expected eof"))?;
         }
