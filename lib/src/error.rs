@@ -42,9 +42,10 @@ impl<C, E> ParseError<C, E> {
 
 impl<C: Show, E: std::fmt::Display> std::fmt::Display for ParseError<C, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[cfg(feature = "color")] yansi::Paint::disable();
+        #[cfg(feature = "color")] yansi::disable();
         write!(f, "{} ({})", self.error, &self.info.context as &dyn Show)?;
-        #[cfg(feature = "color")] yansi::Paint::enable();
+        #[cfg(feature = "color")] yansi::whenever(yansi::Condition::DEFAULT);
+
         for info in &self.stack {
             write!(f, "\n + {}", info.parser.name)?;
             write!(f, " {}", &info.context as &dyn Show)?;

@@ -1,5 +1,8 @@
 pub use crate::input::{Input, Rewind, Token, Slice, Show, ParserInfo};
 
+#[cfg(feature = "color")]
+use yansi::Paint;
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Span<'a> {
     /// Start line/column/offset.
@@ -36,7 +39,7 @@ impl<'a> Show for Span<'a> {
                 write_snippet(f, &snippet[..SNIPPET_LEN / 2])?;
 
                 #[cfg(feature = "color")]
-                write!(f, " {} ", yansi::Paint::blue("..."))?;
+                write!(f, " {} ", "...".blue())?;
 
                 #[cfg(not(feature = "color"))]
                 write!(f, " ... ")?;
@@ -49,18 +52,19 @@ impl<'a> Show for Span<'a> {
 
             if let Some(cursor) = self.cursor {
                 #[cfg(feature = "color")]
-                write!(f, "{}", yansi::Paint::blue(cursor.escape_debug()))?;
+                write!(f, "{}", cursor.escape_debug().blue())?;
 
                 #[cfg(not(feature = "color"))]
                 write!(f, "{}", cursor.escape_debug())?;
             }
+
             write!(f, "\"")?;
         } else {
             #[cfg(feature = "color")]
-            write!(f, " {}", yansi::Paint::blue("[EOF]"))?;
+            write!(f, " {}", "[EOF]".blue())?;
 
             #[cfg(not(feature = "color"))]
-            write!(f, " [EOF]");
+            write!(f, " [EOF]")?;
         }
 
         Ok(())
