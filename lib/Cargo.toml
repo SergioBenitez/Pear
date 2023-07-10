@@ -1,7 +1,7 @@
 [package]
 name = "pear"
 version = "0.2.5"
-authors = ["Sergio Benitez <sb@sergio.bz>"]
+nauthors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A pear is a fruit."
 license = "MIT/Apache-2.0"
 edition = "2018"
@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 yansi = { version = "1.0.0-rc", optional = true }
 pear_codegen = { version = "0.2.5", path = "../codegen" }
-inlinable_string = "0.1"
+inlinable_string = "0.1.9"
 
 [features]
 default = ["color"]
