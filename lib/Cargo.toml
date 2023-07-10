@@ -7,7 +7,7 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-yansi = { version = "1.0.0-gamma", optional = true }
+yansi = { version = "1.0.0-rc", optional = true }
 pear_codegen = { version = "0.2.4", path = "../codegen" }
 inlinable_string = "0.1"
 
