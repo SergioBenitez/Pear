@@ -10,10 +10,10 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-quote = "1.0"
-proc-macro2 = { version = "1.0" }
-syn = { version = "2.0", features = ["full", "extra-traits", "visit-mut"] }
-proc-macro2-diagnostics = "0.10"
+quote = "1.0.30"
+proc-macro2 = { version = "1.0.50" }
+syn = { version = "2.0.30", features = ["full", "extra-traits", "visit-mut"] }
+proc-macro2-diagnostics = "0.10.1"
 
 [dev-dependencies]
 pear = { path = "../lib" }
