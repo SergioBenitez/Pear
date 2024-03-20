@@ -1,6 +1,6 @@
 [package]
 name = "pear"
-version = "0.2.8"
+version = "0.2.9"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A pear is a fruit."
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ repository = "https://github.com/SergioBenitez/Pear"
 
 [dependencies]
 yansi = { version = "1.0.0-rc.1", optional = true }
-pear_codegen = { version = "0.2.8", path = "../codegen" }
+pear_codegen = { version = "0.2.9", path = "../codegen" }
 inlinable_string = "0.1.12"
 
 [features]

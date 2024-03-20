@@ -1,6 +1,6 @@
 [package]
 name = "pear_codegen"
-version = "0.2.8"
+version = "0.2.9"
 authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A (codegen) pear is a fruit."
 license = "MIT OR Apache-2.0"
