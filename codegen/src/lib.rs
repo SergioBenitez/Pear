@@ -17,12 +17,12 @@ use proc_macro2_diagnostics::{Diagnostic, SpanDiagnosticExt};
 use crate::parser::*;
 
 fn parse_marker_ident(span: proc_macro2::Span) -> syn::Ident {
-    const PARSE_MARKER_IDENT: &'static str = "____parse_parse_marker";
+    const PARSE_MARKER_IDENT: &str = "____parse_parse_marker";
     syn::Ident::new(PARSE_MARKER_IDENT, span)
 }
 
 fn parser_info_ident(span: proc_macro2::Span) -> syn::Ident {
-    const PARSE_INFO_IDENT: &'static str = "____parse_parser_info";
+    const PARSE_INFO_IDENT: &str = "____parse_parser_info";
     syn::Ident::new(PARSE_INFO_IDENT, span)
 }
 
@@ -71,7 +71,7 @@ impl VisitMut for ParserTransformer {
     }
 
     fn visit_macro_mut(&mut self, m: &mut syn::Macro) {
-        if let Some(ref segment) = m.path.segments.last() {
+        if let Some(segment) = m.path.segments.last() {
             let name = segment.ident.to_string();
             if name == "switch" || name.starts_with("parse_") {
                 let (input, output) = (&self.input, &self.output);
@@ -90,8 +90,6 @@ impl VisitMut for ParserTransformer {
 
                 let parser_info = quote!([#info; #input; #mark; #output]);
                 m.tokens = quote_spanned!(m.span() => #parser_info #tokens);
-            } else {
-                return
             }
         }
     }
@@ -124,7 +122,7 @@ fn wrapping_fn_block(
     args: &AttrArgs,
     ret_ty: &syn::Type,
 ) -> PResult<syn::Block> {
-    let (input, input_ty) = extract_input_ident_ty(&function)?;
+    let (input, input_ty) = extract_input_ident_ty(function)?;
     let fn_block = &function.block;
 
     let span = function.span();
@@ -138,8 +136,8 @@ fn wrapping_fn_block(
         ),
         false => quote_spanned!(span => (
             |#info_ident: &#scope::input::ParserInfo, #mark_ident: &mut <#input_ty as #scope::input::Input>::Marker| {
-                use #scope::result::AsResult;
-                AsResult::as_result(#fn_block)
+                use #scope::result::IntoResult;
+                IntoResult::into_result(#fn_block)
             }
         ))
     };
@@ -182,7 +180,7 @@ fn wrapping_fn_block(
     };
 
     syn::parse(new_block_tokens.into())
-        .map_err(|e| function.span().error(format!("bad function: {}", e)).into())
+        .map_err(|e| function.span().error(format!("bad function: {}", e)))
 }
 
 fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<TokenStream> {
@@ -209,7 +207,10 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
     function.block = Box::new(wrapping_fn_block(&function, scope, args, &ret_ty)?);
     function.attrs.extend(inline);
 
-    Ok(quote!(#function))
+    Ok(quote! {
+        #[allow(clippy::all, clippy::pedantic, clippy::nursery)]
+        #function
+    })
 }
 
 impl Case {

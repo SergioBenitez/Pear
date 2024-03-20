@@ -44,11 +44,11 @@ impl fmt::Display for IniConfig<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for section in self.sections.iter() {
             if let Some(name) = section.name {
-                write!(f, "[({})]\n", name)?;
+                writeln!(f, "[({})]", name)?;
             }
 
             for property in section.properties.iter() {
-                write!(f, "({})=({})\n", property.name, property.value)?;
+                writeln!(f, "({})=({})", property.name, property.value)?;
             }
         }
 
@@ -63,7 +63,7 @@ fn is_whitespace(&byte: &char) -> bool {
 
 #[inline]
 fn is_num_char(&byte: &char) -> bool {
-    match byte { '0'..='9' | '.' => true, _ => false }
+    matches!(byte, '0'..='9' | '.')
 }
 
 parse_declare!(Input<'a>(Token = char, Slice = &'a str, Many = &'a str));

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #![warn(rust_2018_idioms)]
 
 use pear::input::{Pear, Text};
@@ -30,7 +31,7 @@ fn is_whitespace(&byte: &char) -> bool {
 
 #[inline]
 fn is_ident_char(&byte: &char) -> bool {
-    match byte { '0'..='9' | 'a'..='z' | 'A'..='Z' => true, _ => false }
+    matches!(byte, '0'..='9' | 'a'..='z' | 'A'..='Z')
 }
 
 #[inline]

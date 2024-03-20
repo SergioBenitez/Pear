@@ -1,4 +1,4 @@
-pub use crate::input::{Input, Rewind, Token, Slice, Show, ParserInfo};
+pub use crate::input::{Input, Rewind, Show, ParserInfo};
 
 #[cfg(feature = "color")]
 use yansi::Paint;
@@ -166,7 +166,7 @@ impl<'a> Input for Text<'a> {
     fn context(&mut self, mark: Self::Marker) -> Self::Context {
         let cursor = self.token();
         let bytes_read = self.start.len() - self.current.len();
-        let pos = if bytes_read == 0 {
+        if bytes_read == 0 {
             Span { start: (1, 1, 0), end: (1, 1, 0), snippet: None, cursor }
         } else {
             let start_offset = mark;
@@ -187,9 +187,7 @@ impl<'a> Input for Text<'a> {
             };
 
             Span { start, end, cursor, snippet }
-        };
-
-        pos
+        }
     }
 }
 

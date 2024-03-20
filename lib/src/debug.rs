@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use inlinable_string::InlinableString;
 
 use crate::input::{Show, Input, Debugger, ParserInfo};
-use crate::macros::is_parse_debug;
 
 type Index = usize;
 
@@ -35,7 +34,7 @@ impl<T> Tree<T> {
         // If the stack indicates we have a parent, add to its children.
         if !self.stack.is_empty() {
             let parent = self.stack[self.stack.len() - 1];
-            self.children.entry(parent).or_insert(vec![]).push(index);
+            self.children.entry(parent).or_default().push(index);
         }
 
         // Make this the new parent.
@@ -134,8 +133,8 @@ pub struct TreeDebugger {
     tree: Tree<Info>,
 }
 
-impl TreeDebugger {
-    pub fn new() -> Self {
+impl Default for TreeDebugger {
+    fn default() -> Self {
         Self { tree: Tree::new() }
     }
 }

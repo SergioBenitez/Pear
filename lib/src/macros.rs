@@ -42,7 +42,7 @@ macro_rules! parse {
         (move || {
             let result = $parser(input)?;
             $crate::parsers::eof(input).map_err(|e| e.into())?;
-            $crate::result::AsResult::as_result(result)
+            $crate::result::IntoResult::into_result(result)
         })()
     });
     ($parser:ident : $e:expr) => (parse!($parser(): $e));
@@ -51,7 +51,7 @@ macro_rules! parse {
         (move || {
             let result = $parser(&mut input $(, $x)*)?;
             $crate::parsers::eof(&mut input).map_err(|e| e.into())?;
-            $crate::result::AsResult::as_result(result)
+            $crate::result::IntoResult::into_result(result)
         })()
     })
 }

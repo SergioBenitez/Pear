@@ -144,7 +144,7 @@ impl<'a, T: Clone> Indexable for &'a [T] {
     type Iter = std::iter::Cloned<std::slice::Iter<'a, T>>;
 
     fn head(&self) -> Option<Self::One> {
-        self.get(0).cloned()
+        self.first().cloned()
     }
 
     fn length_of(_: Self::One) -> usize {

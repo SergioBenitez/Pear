@@ -1,5 +1,3 @@
-use std::default::Default;
-
 use crate::input::{Pear, Input, Rewind, Token, Result};
 use crate::macros::parser;
 use crate::parsers::*;

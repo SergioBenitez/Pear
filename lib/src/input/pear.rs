@@ -24,11 +24,9 @@ impl<I> fmt::Debug for Options<I> {
 impl<I: Input> Default for Options<I> {
     #[cfg(debug_assertions)]
     fn default() -> Self {
-        use crate::debug::TreeDebugger;
-        let debugger: Box<dyn Debugger<I>> = Box::new(TreeDebugger::new());
         Options {
             stacked_context: true,
-            debugger: Some(debugger),
+            debugger: Some(Box::<crate::debug::TreeDebugger>::default()),
         }
     }
 

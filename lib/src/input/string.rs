@@ -1,4 +1,4 @@
-pub use crate::input::{Input, Token, Slice, ParserInfo};
+pub use crate::input::{Input, ParserInfo};
 
 impl<'a> Input for &'a str {
     type Token = char;
