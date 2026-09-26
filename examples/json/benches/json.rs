@@ -1,8 +1,9 @@
 use pear::input::Result;
 use pear::macros::parse;
+use std::hint::black_box;
 
+use criterion::{criterion_group, criterion_main, Criterion};
 use json::*;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[inline(always)]
 fn parse_json<'a, I: Input<'a>>(input: I) -> Result<JsonValue<'a>, I> {

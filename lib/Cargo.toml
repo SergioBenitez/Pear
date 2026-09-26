@@ -8,9 +8,9 @@ edition = "2018"
 repository = "https://github.com/SergioBenitez/Pear"
 
 [dependencies]
-yansi = { version = "1.0.0-rc.1", optional = true }
+yansi = { version = "1.0.1", optional = true }
 pear_codegen = { version = "0.2.9", path = "../codegen" }
-inlinable_string = "0.1.12"
+inlinable_string = "0.1.15"
 
 [features]
 default = ["color"]
