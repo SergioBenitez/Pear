@@ -5,6 +5,7 @@ authors = ["Sergio Benitez <sb@sergio.bz>"]
 description = "A (codegen) pear is a fruit."
 license = "MIT OR Apache-2.0"
 edition = "2018"
+rust-version = "1.71"
 repository = "https://github.com/SergioBenitez/Pear"
 
 [lib]
