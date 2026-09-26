@@ -23,7 +23,7 @@ impl Length for str {
     }
 }
 
-impl<'a, T> Length for &'a [T] {
+impl<T> Length for &[T] {
     #[inline(always)]
     fn len(&self) -> usize {
         <[T]>::len(self)
@@ -59,7 +59,7 @@ impl<T> Length for Vec<T> {
     }
 }
 
-impl<'a> Length for &'a str {
+impl Length for &str {
     #[inline(always)]
     fn len(&self) -> usize {
         str::len(self)

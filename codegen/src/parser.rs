@@ -79,7 +79,7 @@ type CallPatterns = Punctuated<CallPattern, Token![|]>;
 
 #[derive(Debug)]
 pub enum Pattern {
-    Wild(Token![_]),
+    Wild,
     Calls(CallPatterns),
 }
 
@@ -151,7 +151,7 @@ impl Parse for Pattern {
 
         // Parse the pattern.
         let pattern = match input.parse::<Token![_]>() {
-            Ok(wild) => Pattern::Wild(wild),
+            Ok(_) => Pattern::Wild,
             Err(_) => Pattern::Calls(input.call(CallPatterns::parse_separated_nonempty)?)
         };
 
@@ -203,9 +203,9 @@ impl Parse for Case {
 
 #[derive(Debug)]
 pub struct Context {
-    pub info: syn::Ident,
+    pub _info: syn::Ident,
     pub input: syn::Expr,
-    pub marker: syn::Expr,
+    pub _marker: syn::Expr,
     pub output: syn::Type,
 }
 
@@ -222,7 +222,7 @@ impl Parse for Context {
             Ok((info, input, marker, output))
         })?;
 
-        Ok(Context { info, input, marker, output })
+        Ok(Context { _info: info, input, _marker: marker, output })
     }
 }
 
@@ -239,7 +239,7 @@ impl Parse for Switch {
         }
 
         for case in cases.iter().take(cases.len() - 1) {
-            if let Pattern::Wild(..) = case.pattern {
+            if let Pattern::Wild = case.pattern {
                 if case.guard.is_none() {
                     Err(case.span.error("unguarded `_` can only appear as the last case"))?;
                 }

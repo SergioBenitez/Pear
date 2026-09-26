@@ -61,14 +61,16 @@ fn combo<'a>(input: &mut Pear<Text<'a>>) -> Result<'a, ()> {
 
 impl<'a> Error<'a> {
     fn assert_expected(self) {
-        if let Error::Other { .. } = self {
-            panic!("expected 'Expected', was 'Other'")
+        match self {
+            Error::Expected(expected) => drop(expected),
+            Error::Other { .. } => panic!("expected 'Expected', was 'Other'")
         }
     }
 
     fn assert_other(self) {
-        if let Error::Expected(..) = self {
-            panic!("expected 'Other', was 'Expected'")
+        match self {
+            Error::Other { message, second } => drop((message, second)),
+            Error::Expected(..) => panic!("expected 'Other', was 'Expected'")
         }
     }
 }

@@ -55,7 +55,7 @@ impl VisitMut for ParserTransformer {
         let expr = &v.expr;
         let new_expr = quote_spanned!(expr.span() => #expr.map_err(|e| e.into()));
         let method_call: syn::Expr = syn::parse2(new_expr).expect("okay");
-        v.expr = Box::new(method_call);
+        *v.expr = method_call;
     }
 
     fn visit_expr_call_mut(&mut self, call: &mut syn::ExprCall) {
@@ -204,7 +204,7 @@ fn parser_attribute(input: proc_macro::TokenStream, args: &AttrArgs) -> PResult<
 
     let scope = args.raw.map(|_| quote!(crate)).unwrap_or_else(|| quote!(pear));
     let inline = syn::Attribute::parse_outer.parse2(quote!(#[inline])).unwrap();
-    function.block = Box::new(wrapping_fn_block(&function, scope, args, &ret_ty)?);
+    *function.block = wrapping_fn_block(&function, scope, args, &ret_ty)?;
     function.attrs.extend(inline);
 
     Ok(quote! {
@@ -228,7 +228,7 @@ impl Case {
         visit_mut::visit_expr_mut(&mut transformer, &mut case_expr);
 
         match this.pattern {
-            Pattern::Wild(..) => match this.guard.as_ref() {
+            Pattern::Wild => match this.guard.as_ref() {
                 Some(guard) => {
                     let rest_tokens = Case::to_tokens(context, cases);
                     quote!(if #guard { #case_expr } else { #rest_tokens })
